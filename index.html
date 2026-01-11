@@ -2279,102 +2279,10 @@ EXAMPLE OUTPUT:
         };
 
         // ==========================================
-        // COMPONENT: PRIVACY MODAL
+        // FUNCTION: SHOW PRIVACY POPUP
         // ==========================================
-        const PrivacyModal = ({ isOpen, onClose }) => {
-            if (!isOpen) return null;
-
-            return (
-                <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={onClose}>
-                    <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-8 max-w-2xl w-full max-h-[80vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-                        <div className="flex items-center justify-between mb-6">
-                            <h2 className="text-2xl font-bold text-white">Privacy Notice</h2>
-                            <button onClick={onClose} className="text-zinc-400 hover:text-white transition-colors">
-                                <Icon name="xmark" size={24} />
-                            </button>
-                        </div>
-                        
-                        <div className="space-y-6 text-zinc-300">
-                            <div>
-                                <h3 className="text-lg font-semibold text-white mb-2 flex items-center gap-2">
-                                    <Icon name="eye-slash" className="text-green-400" /> No Tracking
-                                </h3>
-                                <p className="text-sm">
-                                    This website does not use tracking cookies or analytics services. Your visit is private.
-                                </p>
-                            </div>
-
-                            <div>
-                                <h3 className="text-lg font-semibold text-white mb-2 flex items-center gap-2">
-                                    <Icon name="hard-drive" className="text-blue-400" /> Local Storage
-                                </h3>
-                                <p className="text-sm">
-                                    We use your browser's <code>localStorage</code> to remember your settings. This data stays on your device and is never sent to us.
-                                </p>
-                                <table style="width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 0.9rem;">
-                                    <thead>
-                                        <tr style="border-bottom: 2px solid #eee; text-align: left;">
-                                            <th style="padding: 8px;">Item</th>
-                                            <th style="padding: 8px;">Purpose</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        <tr style="border-bottom: 1px solid #eee;">
-                                            <td style="padding: 8px;"><code>pollinations_token</code></td>
-                                            <td style="padding: 8px;">Remembers your API connection (OAuth).</td>
-                                        </tr>
-                                        <tr style="border-bottom: 1px solid #eee;">
-                                            <td style="padding: 8px;"><code>app_settings</code></td>
-                                            <td style="padding: 8px;">Saves your tool configurations.</td>
-                                        </tr>
-                                    </tbody>
-                                </table>
-                            </div>
-
-                            <div>
-                                <h3 className="text-lg font-semibold text-white mb-2 flex items-center gap-2">
-                                    <Icon name="plug" className="text-purple-400" /> Third-Party Services
-                                </h3>
-                                <ul className="text-sm space-y-3 ml-6">
-                                    <li>
-                                        <strong className="text-white">Pollinations AI:</strong> If you choose to connect your account via OAuth, Pollinations AI will handle your login. We do not store your credentials.
-                                    </li>
-                                    <li>
-                                        <strong className="text-white">Cloudflare:</strong> We use Cloudflare to host this site and ensure security. Cloudflare may process basic network data (like IP addresses) to protect against attacks, as part of our legitimate interest in maintaining a secure site.
-                                    </li>
-                                </ul>
-                            </div>
-
-                            <div>
-                                <h3 className="text-lg font-semibold text-white mb-2 flex items-center gap-2">
-                                    <Icon name="shield-halved" className="text-cyan-400" /> Your Rights
-                                </h3>
-                                <p className="text-sm">
-                                    Since we do not collect personal data, we have no data to delete or export. For questions, contact: <a href="mailto:contact@sanne.gay" className="text-cyan-400 hover:text-cyan-300 underline">contact@sanne.gay</a>
-                                </p>
-                            </div>
-
-                            <div>
-                                <h3 className="text-lg font-semibold text-white mb-2 flex items-center gap-2">
-                                    <Icon name="code-branch" className="text-orange-400" /> Open Source
-                                </h3>
-                                <p className="text-sm">
-                                    This project is open source and hosted on GitHub. No personal data is collected or stored by the repository itself.
-                                </p>
-                            </div>
-                        </div>
-
-                        <div className="mt-6 pt-6 border-t border-zinc-800">
-                            <button 
-                                onClick={onClose}
-                                className="w-full bg-zinc-800 hover:bg-zinc-700 text-white py-3 rounded-xl font-semibold transition-colors"
-                            >
-                                Close
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            );
+        const showPrivacyNotice = () => {
+            alert(`PRIVACY NOTICE\n\n🔒 NO TRACKING\nThis website does not use tracking cookies or analytics services. Your visit is private.\n\n💾 LOCAL STORAGE\nWe use your browser's localStorage to remember your settings. This data stays on your device and is never sent to us.\n- pollinations_token: Remembers your API connection (OAuth)\n- app_settings: Saves your tool configurations\n\n🔌 THIRD-PARTY SERVICES\n• Pollinations AI: If you connect via OAuth, Pollinations handles your login. We don't store your credentials.\n• Cloudflare: Hosts this site and processes basic network data (like IP addresses) for security.\n\n🛡️ YOUR RIGHTS\nSince we don't collect personal data, we have no data to delete or export.\nFor questions, contact: contact@sanne.gay\n\n📖 OPEN SOURCE\nThis project is open source and hosted on GitHub. No personal data is collected or stored.`);
         };
 
         // ==========================================
@@ -2479,7 +2387,6 @@ EXAMPLE OUTPUT:
             const [view, setView] = useState(getViewFromHash(window.location.hash));
             const [pollinationsKey, setPollinationsKey] = useState('');
             const [showHelpModal, setShowHelpModal] = useState(false);
-            const [showPrivacyModal, setShowPrivacyModal] = useState(false);
             
             const handleDisconnectPollinations = () => {
                 localStorage.removeItem('fm_pollinations_key');
@@ -2736,7 +2643,7 @@ EXAMPLE OUTPUT:
                                 <span className="text-zinc-700">•</span>
                                 <button 
                                     type="button"
-                                    onClick={() => setShowPrivacyModal(true)}
+                                    onClick={showPrivacyNotice}
                                     className="text-zinc-500 hover:text-zinc-300 transition-colors underline"
                                 >
                                     Privacy Notice
@@ -2748,9 +2655,6 @@ EXAMPLE OUTPUT:
                     
                     {/* Help Modal */}
                     <HelpModal isOpen={showHelpModal} onClose={() => setShowHelpModal(false)} />
-                    
-                    {/* Privacy Modal */}
-                    <PrivacyModal isOpen={showPrivacyModal} onClose={() => setShowPrivacyModal(false)} />
                 </div>
             );
         };
