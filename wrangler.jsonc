@@ -1,0 +1,8 @@
+{
+  "name": "fm-creator",
+  "compatibility_date": "2026-01-10",
+  "main": "cloudflare-worker.js", 
+  "assets": {
+    "directory": "./"
+  }
+}

@@ -1,0 +1,2752 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FM26 Creator</title>
+    
+    <!-- React & ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    
+    <!-- Babel -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- JSZip -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+    
+    <!-- Tailwind CSS (required for HeroUI) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        primary: {
+                            50: '#f0f9ff',
+                            100: '#e0f2fe',
+                            200: '#bae6fd',
+                            300: '#7dd3fc',
+                            400: '#38bdf8',
+                            500: '#0ea5e9',
+                            600: '#0284c7',
+                            700: '#0369a1',
+                            800: '#075985',
+                            900: '#0c4a6e',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <style>
+        * {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Helvetica Neue', 'Ubuntu', sans-serif;
+        }
+        
+        body {
+            background: #000000;
+        }
+        
+        .spinner {
+            width: 20px;
+            height: 20px;
+            border: 2px solid rgba(255,255,255,0.1);
+            border-top: 2px solid #0ea5e9;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        /* Skin tone slider */
+        .skin-tone-slider::-webkit-slider-thumb {
+            background: var(--thumb-color, #ffffff);
+            border: 2px solid #18181b;
+        }
+        .skin-tone-slider::-moz-range-thumb {
+            background: var(--thumb-color, #ffffff);
+            border: 2px solid #18181b;
+        }
+        
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 10px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #18181b;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #3f3f46;
+            border-radius: 5px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #52525b;
+        }
+    </style>
+</head>
+<body class="dark bg-black text-white">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        // Version constant
+        const VERSION = "1.1";
+        
+        const { useState, useEffect, useRef } = React;
+
+        // HeroUI-inspired Components
+        const Card = ({ children, className = '', ...props }) => (
+            <div className={`bg-zinc-900 border border-zinc-800 rounded-2xl p-6 ${className}`} {...props}>
+                {children}
+            </div>
+        );
+
+        const Button = ({ children, variant = 'solid', color = 'primary', isLoading = false, className = '', ...props }) => {
+            const baseClasses = 'px-6 py-3 rounded-xl font-semibold transition-all duration-200 flex items-center justify-center gap-2';
+            const variants = {
+                solid: color === 'primary' 
+                    ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-lg shadow-blue-500/20' 
+                    : color === 'success'
+                    ? 'bg-green-600 hover:bg-green-700 text-white shadow-lg shadow-green-500/20'
+                    : color === 'danger'
+                    ? 'bg-red-600 hover:bg-red-700 text-white shadow-lg shadow-red-500/20'
+                    : 'bg-zinc-800 hover:bg-zinc-700 text-white',
+                bordered: `border-2 ${color === 'primary' ? 'border-blue-600 text-blue-600 hover:bg-blue-600/10' : 'border-zinc-700 text-white hover:bg-zinc-800'}`,
+                light: `${color === 'primary' ? 'bg-blue-600/10 text-blue-600 hover:bg-blue-600/20' : 'bg-zinc-800/50 text-white hover:bg-zinc-800'}`,
+            };
+            
+            return (
+                <button className={`${baseClasses} ${variants[variant]} ${className}`} disabled={isLoading} {...props}>
+                    {isLoading ? <div className="spinner" /> : children}
+                </button>
+            );
+        };
+
+        const Input = ({ label, helperText, ...props }) => (
+            <div className="w-full">
+                {label && <label className="block text-sm font-medium text-zinc-400 mb-2">{label}</label>}
+                <input 
+                    className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-white placeholder-zinc-600 focus:border-blue-600 focus:ring-2 focus:ring-blue-600/20 transition-all outline-none"
+                    {...props} 
+                />
+                {helperText && <p className="text-xs text-zinc-500 mt-1">{helperText}</p>}
+            </div>
+        );
+
+        const Select = ({ label, children, ...props }) => (
+            <div className="w-full">
+                {label && <label className="block text-sm font-medium text-zinc-400 mb-2">{label}</label>}
+                <select 
+                    className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-white focus:border-blue-600 focus:ring-2 focus:ring-blue-600/20 transition-all outline-none"
+                    {...props}
+                >
+                    {children}
+                </select>
+            </div>
+        );
+
+        const Checkbox = ({ label, children, ...props }) => (
+            <label className="flex items-center gap-3 cursor-pointer group">
+                <input 
+                    type="checkbox" 
+                    className="w-5 h-5 rounded-lg border-2 border-zinc-700 bg-zinc-900 checked:bg-blue-600 checked:border-blue-600 transition-all cursor-pointer appearance-none relative
+                    before:content-['✓'] before:absolute before:inset-0 before:flex before:items-center before:justify-center before:text-white before:text-sm before:opacity-0 checked:before:opacity-100"
+                    {...props} 
+                />
+                <span className="text-sm text-zinc-300 group-hover:text-white transition-colors">{label || children}</span>
+            </label>
+        );
+
+        const Tabs = ({ tabs, activeTab, onChange }) => (
+            <div className="flex gap-2 p-1 bg-zinc-900 rounded-xl overflow-x-auto">
+                {tabs.map(tab => (
+                    <button
+                        key={tab.key}
+                        onClick={() => onChange(tab.key)}
+                        className={`px-4 py-2.5 rounded-lg font-semibold text-sm whitespace-nowrap transition-all ${
+                            activeTab === tab.key 
+                                ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20' 
+                                : 'text-zinc-400 hover:text-white hover:bg-zinc-800'
+                        }`}
+                    >
+                        {tab.label}
+                    </button>
+                ))}
+            </div>
+        );
+
+        const Chip = ({ children, color = 'default', className = '' }) => {
+            const colors = {
+                default: 'bg-zinc-800 text-zinc-300',
+                primary: 'bg-blue-600/20 text-blue-400 border border-blue-600/30',
+                success: 'bg-green-600/20 text-green-400 border border-green-600/30',
+                warning: 'bg-yellow-600/20 text-yellow-400 border border-yellow-600/30',
+                danger: 'bg-red-600/20 text-red-400 border border-red-600/30'
+            };
+            
+            return (
+                <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold ${colors[color]} ${className}`}>
+                    {children}
+                </span>
+            );
+        };
+
+        const Slider = ({ label, value, onChange, min = 0, max = 100, ...props }) => (
+            <div className="w-full">
+                {label && (
+                    <div className="flex justify-between mb-2">
+                        <label className="text-sm font-medium text-zinc-400">{label}</label>
+                        <span className="text-sm font-semibold text-blue-500">{value}</span>
+                    </div>
+                )}
+                <input
+                    type="range"
+                    min={min}
+                    max={max}
+                    value={value}
+                    onChange={onChange}
+                    className="w-full h-2 bg-zinc-800 rounded-lg appearance-none cursor-pointer
+                    [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:h-5 
+                    [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-blue-600 [&::-webkit-slider-thumb]:cursor-pointer
+                    [&::-webkit-slider-thumb]:shadow-lg [&::-webkit-slider-thumb]:shadow-blue-500/30
+                    [&::-webkit-slider-thumb]:hover:scale-110 [&::-webkit-slider-thumb]:transition-transform"
+                    {...props}
+                />
+            </div>
+        );
+
+        // --- ICONS (Font Awesome) ---
+        const Icon = ({ name, className = '', size }) => (
+            <i className={`fa-solid fa-${name} ${className}`} style={size ? { fontSize: `${size}px` } : {}}></i>
+        );
+
+        // --- CLUB ID LOOKUP COMPONENT ---
+        const IdLookupField = ({ label, value, onChange, placeholder, name, clubNameField }) => {
+            const [searchTerm, setSearchTerm] = useState('');
+            const [searchResults, setSearchResults] = useState([]);
+            const [loading, setLoading] = useState(false);
+            const [showDropdown, setShowDropdown] = useState(false);
+            const [isSearching, setIsSearching] = useState(false);
+            const dropdownRef = useRef(null);
+            const inputRef = useRef(null);
+
+            // Close dropdown when clicking outside
+            useEffect(() => {
+                const handleClickOutside = (event) => {
+                    if (dropdownRef.current && !dropdownRef.current.contains(event.target) && 
+                        inputRef.current && !inputRef.current.contains(event.target)) {
+                        setShowDropdown(false);
+                    }
+                };
+                document.addEventListener('mousedown', handleClickOutside);
+                return () => document.removeEventListener('mousedown', handleClickOutside);
+            }, []);
+
+            // Debounced search
+            useEffect(() => {
+                const delayTimer = setTimeout(() => {
+                    if (searchTerm.trim().length >= 2 && isNaN(searchTerm)) {
+                        // Only search if it's not a pure number
+                        searchClubs();
+                    } else {
+                        setSearchResults([]);
+                        setShowDropdown(false);
+                    }
+                }, 300);
+
+                return () => clearTimeout(delayTimer);
+            }, [searchTerm]);
+
+            const searchClubs = async () => {
+                if (!searchTerm.trim()) return;
+                // Limit search term length to prevent DoS
+                if (searchTerm.length > 100) return;
+                setLoading(true);
+                
+                try {
+                    const response = await fetch(
+                        `${PROXY_URL}/api/clubs?search=${encodeURIComponent(searchTerm)}&limit=50`
+                    );
+                    
+                    if (!response.ok) throw new Error('Failed to search database');
+                    
+                    const data = await response.json();
+                    // Already sorted by database, but just in case
+                    const sortedData = data.sort((a, b) => (b.Rep || 0) - (a.Rep || 0));
+                    setSearchResults(sortedData);
+                    setShowDropdown(sortedData.length > 0);
+                } catch (err) {
+                    console.error('Search error:', err);
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            const selectClub = (club) => {
+                // Set the club ID
+                const syntheticEvent = {
+                    target: { name, value: club['Unique ID'] }
+                };
+                onChange(syntheticEvent);
+                
+                // If clubNameField is provided, also set the club name
+                if (clubNameField) {
+                    const nameEvent = {
+                        target: { name: clubNameField, value: club.Name }
+                    };
+                    onChange(nameEvent);
+                }
+                
+                setSearchTerm('');
+                setSearchResults([]);
+                setShowDropdown(false);
+                setIsSearching(false);
+            };
+
+            const handleInputChange = (e) => {
+                const val = e.target.value;
+                
+                // If it's a number, treat it as direct ID input
+                if (!isNaN(val) && val.trim() !== '') {
+                    onChange(e);
+                    setSearchTerm('');
+                    setShowDropdown(false);
+                    setIsSearching(false);
+                } else {
+                    // It's text, treat as search
+                    setSearchTerm(val);
+                    setIsSearching(true);
+                    if (!val) {
+                        onChange({ target: { name, value: '' } });
+                    }
+                }
+            };
+
+            const handleFocus = () => {
+                if (searchTerm) {
+                    setShowDropdown(true);
+                }
+            };
+
+            const displayValue = isSearching ? searchTerm : value;
+
+            return (
+                <div className="w-full">
+                    {label && <label className="text-xs text-slate-400 block mb-1">{label}</label>}
+                    
+                    <div className="relative">
+                        <input
+                            ref={inputRef}
+                            type="text"
+                            name={name}
+                            value={displayValue}
+                            onChange={handleInputChange}
+                            onFocus={handleFocus}
+                            placeholder={placeholder}
+                            className="w-full bg-slate-900 border border-slate-600 rounded p-2 text-sm text-white"
+                        />
+                        {loading && (
+                            <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                                <div className="spinner"></div>
+                            </div>
+                        )}
+
+                        {/* Dropdown Results */}
+                        {showDropdown && searchResults.length > 0 && (
+                            <div 
+                                ref={dropdownRef}
+                                className="absolute z-50 left-0 mt-2 bg-slate-900 border-2 border-slate-500 rounded shadow-2xl max-h-96 overflow-y-auto min-w-[600px] w-[600px]"
+                            >
+                                {searchResults.map((club) => {
+                                    const duplicates = searchResults.filter(c => c.Name === club.Name && c.Nation === club.Nation);
+                                    const isFemale = duplicates.length > 1 && Number(club['Unique ID']) === Math.max(...duplicates.map(d => Number(d['Unique ID'])));
+                                    
+                                    return (
+                                    <button
+                                        key={club['Unique ID']}
+                                        onClick={() => selectClub(club)}
+                                        className="w-full bg-slate-900 hover:bg-slate-700 border-b border-slate-700 last:border-b-0 p-4 text-left transition-colors"
+                                    >
+                                        <div className="flex items-start justify-between gap-4">
+                                            <div className="flex-1 min-w-0">
+                                                <div className="font-bold text-white truncate flex items-center gap-2">
+                                                    {club.Name}
+                                                    {isFemale && <span className="text-pink-500 text-xs font-bold">F</span>}
+                                                </div>
+                                                <div className="text-xs text-zinc-500 mt-1 flex items-center gap-2 flex-wrap">
+                                                    <span>{club.Nation}</span>
+                                                    <span>•</span>
+                                                    <span>Rep: {club.Rep}</span>
+                                                    {club.Status && (
+                                                        <>
+                                                            <span>•</span>
+                                                            <Chip 
+                                                                color={
+                                                                    club.Status === 'Professional' ? 'success' :
+                                                                    club.Status === 'Semi-Professional' ? 'primary' :
+                                                                    'warning'
+                                                                }
+                                                                className="text-[10px] px-2 py-0.5"
+                                                            >
+                                                                {club.Status}
+                                                            </Chip>
+                                                        </>
+                                                    )}
+                                                </div>
+                                            </div>
+                                            <div className="text-right flex-shrink-0">
+                                                <div className="text-xs text-blue-500 font-mono font-semibold">
+                                                    ID: {club['Unique ID']}
+                                                </div>
+                                                {club.Balance && (
+                                                    <div className="text-xs text-green-500 mt-1 font-semibold">
+                                                        €{parseInt(club.Balance).toLocaleString()}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </button>
+                                    );
+                                })}
+                            </div>
+                        )}
+
+                        {/* No Results Message */}
+                        {showDropdown && searchTerm.length >= 2 && searchResults.length === 0 && !loading && (
+                            <div 
+                                ref={dropdownRef}
+                                className="absolute z-50 w-full mt-2 bg-zinc-900 border border-zinc-800 rounded-xl shadow-2xl p-4 text-center"
+                            >
+                                <p className="text-zinc-500 text-sm">No clubs found</p>
+                            </div>
+                        )}
+                    </div>
+                    
+                    {/* Helper text */}
+                    {!value && (
+                        <p className="text-xs text-zinc-500 mt-1.5">
+                            Type club name to search or enter ID directly
+                        </p>
+                    )}
+                </div>
+            );
+        };
+
+        // --- NATIONS DATA ---
+        const nationsData = [
+            {id:"106", name:"Afghanistan"}, {id:"752", name:"Albania"}, {id:"5", name:"Algeria"}, {id:"129504", name:"American Samoa"}, {id:"753", name:"Andorra"}, {id:"6", name:"Angola"}, {id:"129514", name:"Anguilla"}, {id:"359", name:"Antigua and Barbuda"}, {id:"1649", name:"Argentina"}, {id:"754", name:"Armenia"}, {id:"360", name:"Aruba"}, {id:"1435", name:"Australia"}, {id:"755", name:"Austria"}, {id:"756", name:"Azerbaijan"}, {id:"107", name:"Bahrain"}, {id:"108", name:"Bangladesh"}, {id:"361", name:"Barbados"}, {id:"758", name:"Belarus"}, {id:"757", name:"Belgium"}, {id:"362", name:"Belize"}, {id:"7", name:"Benin"}, {id:"363", name:"Bermuda"}, {id:"131012", name:"Bhutan"}, {id:"1650", name:"Bolivia"}, {id:"214395", name:"Bonaire"}, {id:"759", name:"Bosnia and Herzegovina"}, {id:"8", name:"Botswana"}, {id:"1651", name:"Brazil"}, {id:"129517", name:"British Virgin Islands"}, {id:"109", name:"Brunei Darussalam"}, {id:"760", name:"Bulgaria"}, {id:"9", name:"Burkina Faso"}, {id:"10", name:"Burundi"}, {id:"118", name:"Cambodia"}, {id:"11", name:"Cameroon"}, {id:"364", name:"Canada"}, {id:"12", name:"Cape Verde Islands"}, {id:"365", name:"Cayman Islands"}, {id:"13", name:"Central African Republic"}, {id:"14", name:"Chad"}, {id:"1652", name:"Chile"}, {id:"110", name:"China PR"}, {id:"138", name:"Chinese Taipei (China PR)"}, {id:"1653", name:"Colombia"}, {id:"919586", name:"Comoros"}, {id:"49", name:"Congo"}, {id:"1436", name:"Cook Islands"}, {id:"366", name:"Costa Rica"}, {id:"215446", name:"Crimea"}, {id:"761", name:"Croatia"}, {id:"367", name:"Cuba"}, {id:"380", name:"Curaçao"}, {id:"762", name:"Cyprus"}, {id:"763", name:"Czechia"}, {id:"53", name:"Democratic Republic of Congo"}, {id:"764", name:"Denmark"}, {id:"15", name:"Djibouti"}, {id:"368", name:"Dominica"}, {id:"142527", name:"Dominican Republic"}, {id:"5626837", name:"East Timor"}, {id:"1654", name:"Ecuador"}, {id:"16", name:"Egypt"}, {id:"370", name:"El Salvador"}, {id:"765", name:"England"}, {id:"17", name:"Equatorial Guinea"}, {id:"129511", name:"Eritrea"}, {id:"766", name:"Estonia"}, {id:"47", name:"Eswatini"}, {id:"18", name:"Ethiopia"}, {id:"767", name:"Faroe Islands"}, {id:"1437", name:"Fiji"}, {id:"768", name:"Finland"}, {id:"769", name:"France"}, {id:"917496", name:"French Guiana"}, {id:"19", name:"Gabon"}, {id:"770", name:"Georgia"}, {id:"771", name:"Germany"}, {id:"21", name:"Ghana"}, {id:"214394", name:"Gibraltar"}, {id:"772", name:"Greece"}, {id:"371", name:"Grenada"}, {id:"917498", name:"Guadeloupe"}, {id:"129508", name:"Guam"}, {id:"373", name:"Guatemala"}, {id:"22", name:"Guinea"}, {id:"23", name:"Guinea-Bissau"}, {id:"374", name:"Guyana"}, {id:"375", name:"Haiti"}, {id:"376", name:"Honduras"}, {id:"111", name:"Hong Kong (China PR)"}, {id:"773", name:"Hungary"}, {id:"774", name:"Iceland"}, {id:"112", name:"India"}, {id:"113", name:"Indonesia"}, {id:"114", name:"Iran"}, {id:"115", name:"Iraq"}, {id:"775", name:"Israel"}, {id:"776", name:"Italy"}, {id:"24", name:"Ivory Coast"}, {id:"377", name:"Jamaica"}, {id:"116", name:"Japan"}, {id:"117", name:"Jordan"}, {id:"119", name:"Kazakhstan"}, {id:"25", name:"Kenya"}, {id:"209002", name:"Kiribati"}, {id:"217945", name:"Kosovo"}, {id:"120", name:"Kuwait"}, {id:"121", name:"Kyrgyzstan"}, {id:"122", name:"Laos"}, {id:"777", name:"Latvia"}, {id:"123", name:"Lebanon"}, {id:"26", name:"Lesotho"}, {id:"27", name:"Liberia"}, {id:"28", name:"Libya"}, {id:"779", name:"Lithuania"}, {id:"780", name:"Luxembourg"}, {id:"124", name:"Macau (China PR)"}, {id:"29", name:"Madagascar"}, {id:"30", name:"Malawi"}, {id:"125", name:"Malaysia"}, {id:"126", name:"Maldives"}, {id:"31", name:"Mali"}, {id:"782", name:"Malta"}, {id:"917502", name:"Martinique"}, {id:"32", name:"Mauritania"}, {id:"33", name:"Mauritius"}, {id:"918740", name:"Mayotte"}, {id:"379", name:"Mexico"}, {id:"15064643", name:"Micronesia"}, {id:"783", name:"Moldova"}, {id:"129505", name:"Mongolia"}, {id:"62002127", name:"Montenegro"}, {id:"129520", name:"Montserrat"}, {id:"34", name:"Morocco"}, {id:"35", name:"Mozambique"}, {id:"127", name:"Myanmar"}, {id:"36", name:"Namibia"}, {id:"128", name:"Nepal"}, {id:"784", name:"Netherlands"}, {id:"129532", name:"New Caledonia"}, {id:"1438", name:"New Zealand"}, {id:"381", name:"Nicaragua"}, {id:"37", name:"Niger"}, {id:"38", name:"Nigeria"}, {id:"129", name:"North Korea"}, {id:"781", name:"North Macedonia"}, {id:"785", name:"Northern Ireland"}, {id:"23008660", name:"Northern Mariana Islands"}, {id:"786", name:"Norway"}, {id:"130", name:"Oman"}, {id:"131", name:"Pakistan"}, {id:"1662", name:"Palestine"}, {id:"382", name:"Panama"}, {id:"1439", name:"Papua New Guinea"}, {id:"1655", name:"Paraguay"}, {id:"1656", name:"Peru"}, {id:"141", name:"Philippines"}, {id:"787", name:"Poland"}, {id:"788", name:"Portugal"}, {id:"383", name:"Puerto Rico"}, {id:"132", name:"Qatar"}, {id:"789", name:"Republic of Ireland"}, {id:"917510", name:"Réunion"}, {id:"790", name:"Romania"}, {id:"791", name:"Russia"}, {id:"39", name:"Rwanda"}, {id:"82082526", name:"Saint Barthélemy"}, {id:"385", name:"Saint Kitts and Nevis"}, {id:"384", name:"Saint Lucia"}, {id:"917508", name:"Saint Martin"}, {id:"386", name:"Saint Vincent and the Grenadines"}, {id:"1444", name:"Samoa"}, {id:"792", name:"San Marino"}, {id:"40", name:"São Tomé and Príncipe"}, {id:"133", name:"Saudi Arabia"}, {id:"793", name:"Scotland"}, {id:"41", name:"Senegal"}, {id:"802", name:"Serbia"}, {id:"42", name:"Seychelles"}, {id:"43", name:"Sierra Leone"}, {id:"134", name:"Singapore"}, {id:"917506", name:"Sint Maarten"}, {id:"794", name:"Slovakia"}, {id:"795", name:"Slovenia"}, {id:"1440", name:"Solomon Islands"}, {id:"44", name:"Somalia"}, {id:"45", name:"South Africa"}, {id:"135", name:"South Korea"}, {id:"13113220", name:"South Sudan"}, {id:"796", name:"Spain"}, {id:"136", name:"Sri Lanka"}, {id:"46", name:"Sudan"}, {id:"387", name:"Suriname"}, {id:"797", name:"Sweden"}, {id:"798", name:"Switzerland"}, {id:"137", name:"Syria"}, {id:"1441", name:"Tahiti"}, {id:"139", name:"Tajikistan"}, {id:"48", name:"Tanzania"}, {id:"140", name:"Thailand"}, {id:"388", name:"The Bahamas"}, {id:"20", name:"The Gambia"}, {id:"50", name:"Togo"}, {id:"1442", name:"Tonga"}, {id:"389", name:"Trinidad and Tobago"}, {id:"51", name:"Tunisia"}, {id:"799", name:"Türkiye"}, {id:"142", name:"Turkmenistan"}, {id:"129526", name:"Turks and Caicos Islands"}, {id:"23088616", name:"Tuvalu"}, {id:"52", name:"Uganda"}, {id:"800", name:"Ukraine"}, {id:"143", name:"United Arab Emirates"}, {id:"390", name:"United States"}, {id:"1657", name:"Uruguay"}, {id:"129523", name:"US Virgin Islands"}, {id:"144", name:"Uzbekistan"}, {id:"1443", name:"Vanuatu"}, {id:"1658", name:"Venezuela"}, {id:"145", name:"Vietnam"}, {id:"801", name:"Wales"}, {id:"146", name:"Yemen"}, {id:"54", name:"Zambia"}, {id:"13100103", name:"Zanzibar"}, {id:"55", name:"Zimbabwe"}
+        ].sort((a,b) => a.name.localeCompare(b.name));
+
+
+        // ==========================================
+        // COMPONENT: CLUB CREATOR
+        // ==========================================
+        const ClubCreator = ({ pollinationsKey }) => {
+            const [activeTab, setActiveTab] = useState('preset');
+            const [loading, setLoading] = useState(false);
+            const [aiLoading, setAiLoading] = useState(false);
+            const [aiCrestLoading, setAiCrestLoading] = useState(false);
+            const [crestBlob, setCrestBlob] = useState(null);
+            const [crestUrl, setCrestUrl] = useState(null);
+            const [crestCloudflareUrl, setCrestCloudflareUrl] = useState(null);
+            const [aiModel, setAiModel] = useState('gptimage-large');
+            const [saveNotification, setSaveNotification] = useState(false);
+            
+            const [data, setData] = useState({
+                // Identity
+                origName: '', origID: '', newName: 'FC Random', newShort: 'Random', newSixLetter: 'FCR', proStatus: '2', crestStyle: 'classic-shield',
+                // Finances
+                balance: '50.000.000', transferBudget: '25.000.000', wageBudget: '500.000', reputation: '6500', sugarDaddyType: '0', youthFund: '10.000',
+                // Stadium & Facs
+                newStadium: 'The Fortress', capacity: '25.000', trainingFac: '15', youthFac: '15', recruitment: '15', yearFounded: '2026', seasonTickets: '15.000', isTrainingGround: false,
+                // Swap
+                swapID: '', 
+                // Graphics (Simplifed to just 2 colors)
+                primaryColor: '#ff0000', secondaryColor: '#ffffff',
+                // Config
+                randomizeSquad: true, boostMorale: true, aiPrompt: '', fanPreset: 'hardcore'
+            });
+
+            // Save settings to localStorage
+            const saveSettings = () => {
+                localStorage.setItem('fm_club_settings', JSON.stringify(data));
+                setSaveNotification(true);
+                setTimeout(() => setSaveNotification(false), 2000);
+            };
+
+            // Helpers
+            const formatNumber = (val) => { let v = val.replace(/\D/g, ''); return v ? new Intl.NumberFormat('de-DE').format(v) : ''; }
+            const getCleanValue = (key) => { if(!data[key]) return '0'; return data[key].toString().replace(/\./g, '').replace(/,/g, ''); };
+            const hexToNormalized = (hex) => {
+                const r = parseInt(hex.slice(1, 3), 16) / 255; const g = parseInt(hex.slice(3, 5), 16) / 255; const b = parseInt(hex.slice(5, 7), 16) / 255;
+                return { r: Number(r.toFixed(4)), g: Number(g.toFixed(4)), b: Number(b.toFixed(4)) };
+            };
+
+            const handleChange = (e) => {
+                const { name, value, type, checked } = e.target;
+                if (['balance', 'transferBudget', 'wageBudget', 'youthFund', 'capacity', 'seasonTickets'].includes(name)) {
+                    setData(p => ({ ...p, [name]: formatNumber(value) }));
+                } else {
+                    setData(p => ({ ...p, [name]: type === 'checkbox' ? checked : value }));
+                }
+            };
+
+            const handlePreset = (type) => {
+                const presets = {
+                    small: { balance: "100.000", transfer: "10.000", wage: "5.000", rep: 2500, cap: "2.500", fac: 4, recruit: 4, season: "500", sugar: "0", status: "1" },
+                    medium: { balance: "5.000.000", transfer: "1.000.000", wage: "50.000", rep: 5000, cap: "12.000", fac: 10, recruit: 10, season: "5.000", sugar: "0", status: "2" },
+                    big: { balance: "60.000.000", transfer: "30.000.000", wage: "500.000", rep: 7000, cap: "35.000", fac: 16, recruit: 16, season: "20.000", sugar: "0", status: "2" },
+                    elite: { balance: "300.000.000", transfer: "150.000.000", wage: "3.000.000", rep: 9000, cap: "65.000", fac: 20, recruit: 20, season: "45.000", sugar: "0", status: "2" }
+                };
+                const p = presets[type];
+                if(p) setData(prev => ({ ...prev, balance: p.balance, transferBudget: p.transfer, wageBudget: p.wage, reputation: p.rep, capacity: p.cap, trainingFac: p.fac, youthFac: p.fac, recruitment: p.recruit, seasonTickets: p.season, sugarDaddyType: p.sugar, proStatus: p.status }));
+            };
+
+            const generateAI = async () => {
+                // Require authentication
+                if (!pollinationsKey) {
+                    const currentUrl = window.location.href.split('#')[0];
+                    window.location.href = `https://enter.pollinations.ai/authorize?redirect_url=${encodeURIComponent(currentUrl)}`;
+                    return;
+                }
+                
+                setAiLoading(true);
+                try {
+                    const userPrompt = data.aiPrompt || "Create a realistic football club.";
+                    const systemInstruction = `You are a soccer database engine. Create a new realistic football club. Generate ONLY a raw JSON object based on the user's input.
+If information is missing in the user text, invent realistic values that stay consistent (e.g., a high reputation club should have high facilities) but also use your imagination a little.
+
+FIELD DEFINITIONS & CONSTRAINTS:
+1.  Identification:
+    - newName (Full name), newShort (Common name), newSixLetter (3-6 chars).
+    - yearFounded: Integer.
+2.  Finances:
+    - balance, transferBudget, wageBudget (per week): Integers. (Constraint: transferBudget < balance).
+    - youthFund: Integer (0-10000).
+    - sugarDaddyType: "0" (None), "1" (Underwriter), "2" (Rich/Foreground), "3" (Background).
+3.  Status & Reputation:
+    - reputation: 1-10000.
+    - proStatus: "0" (Amateur), "1" (Semi-Pro), "2" (Professional).
+4.  Facilities (All 1-20 scale):
+    - trainingFac, youthFac, recruitment.
+5.  Stadium & Fans:
+    - newStadium: Name.
+    - capacity, seasonTickets: Integers.
+    - fanPreset: "hardcore", "family", "glory", "corporate".
+6.  Visuals (Crest/Kit):
+    - crestStyle: "classic-shield", "circular-roundel", "dynamic-diamond", "modern-heraldic".
+    - primaryColor, secondaryColor: Hex codes (e.g. #000000).
+
+EXAMPLE OUTPUT:
+{
+"newName": "Manchester United", "newShort": "Man Utd", "newSixLetter": "MUN",
+"balance": 200000000, "transferBudget": 80000000, "wageBudget": 3500000,
+"reputation": 9200, "yearFounded": 1878, "seasonTickets": 52000,
+"newStadium": "Old Trafford", "capacity": 74000, "trainingFac": 19,
+"youthFac": 18, "recruitment": 20, "youthFund": 9500,
+"sugarDaddyType": "0", "proStatus": "2", "fanPreset": "glory",
+"crestStyle": "classic-shield", "primaryColor": "#DA291C", "secondaryColor": "#FBE122"
+}`;
+                    
+                    const url = `https://gen.pollinations.ai/text/${encodeURIComponent(userPrompt)}?system=${encodeURIComponent(systemInstruction)}&model=gemini-fast&temperature=0.3&json=true&seed=-1`;
+                    
+                    const response = await fetch(url, {
+                        headers: {
+                            'Authorization': `Bearer ${pollinationsKey}`
+                        }
+                    });
+                    
+                    if(!response.ok) {
+                        const errorText = await response.text();
+                        throw new Error(`API Error: ${response.status} - ${errorText}`);
+                    }
+                    
+                    let text = await response.text();
+                    
+                    // Extract JSON from response
+                    const jsonMatch = text.match(/\{[\s\S]*\}/);
+                    if (jsonMatch) text = jsonMatch[0];
+                    
+                    let aiData;
+                    try {
+                        aiData = JSON.parse(text);
+                        // Validate that it's an object and not an array or primitive
+                        if (typeof aiData !== 'object' || aiData === null || Array.isArray(aiData)) {
+                            throw new Error('Invalid response format');
+                        }
+                    } catch (parseErr) {
+                        throw new Error('Failed to parse AI response: ' + parseErr.message);
+                    }
+                    
+                    const formatted = { ...aiData };
+                    ['balance', 'transferBudget', 'wageBudget', 'youthFund', 'capacity', 'seasonTickets'].forEach(key => {
+                        if(formatted[key]) formatted[key] = new Intl.NumberFormat('de-DE').format(formatted[key]);
+                    });
+                    setData(prev => ({ ...prev, ...formatted }));
+                    setActiveTab('identity');
+                } catch(err) { 
+                    alert('AI Error: ' + err.message); 
+                } finally { 
+                    setAiLoading(false); 
+                }
+            };
+
+            const generateCrestAI = async () => {
+                // Require authentication
+                if (!pollinationsKey) {
+                    const currentUrl = window.location.href.split('#')[0];
+                    window.location.href = `https://enter.pollinations.ai/authorize?redirect_url=${encodeURIComponent(currentUrl)}`;
+                    return;
+                }
+                
+                setAiCrestLoading(true);
+                
+                // Generate different prompts based on crest style
+                let fullPrompt = '';
+                if (data.crestStyle === 'classic-shield') {
+                    fullPrompt = `A professional, modern soccer club crest for '${data.newName}'. The design is a **fully enclosed classic heater shield shape**. It features a **white die-cut border** followed by a **thick, solid '${data.primaryColor}' outer stroke**. The interior contains the text '${data.newName}' in a bold, sans-serif font with the year '${data.yearFounded}' below it. Color scheme uses strictly '${data.primaryColor}', '${data.secondaryColor}'. The logo is isolated on a solid, flat light gray background. High-quality vector graphics, sharp geometric edges, flat colors, no gradients, no shadows.`;
+                } else if (data.crestStyle === 'circular-roundel') {
+                    fullPrompt = `A professional, modern soccer club badge for '${data.newName}'. The design is a **fully enclosed circular roundel emblem**. Around the entire circle is a **white die-cut border** and a **thick, solid '${data.primaryColor}' outer ring**. The central circular area contains the text '${data.newName}' in a bold, sans-serif font, with '${data.yearFounded}' placed below. Color scheme uses strictly '${data.primaryColor}', '${data.secondaryColor}'. The logo is isolated on a solid, flat light gray background. High-quality vector graphics, sharp clean edges, flat fill colors, no shadows.`;
+                } else if (data.crestStyle === 'dynamic-diamond') {
+                    fullPrompt = `A professional, modern soccer club logo for '${data.newName}'. The design is a **fully enclosed sharp diamond or rhombus shape**. It is defined by a **white die-cut border** and a **thick, solid '${data.primaryColor}' outer stroke**. Inside the diamond, the text '${data.newName}' is prominently displayed in a bold sans-serif font, with the year '${data.yearFounded}' below. Color scheme uses strictly '${data.primaryColor}', '${data.secondaryColor}'. The logo is isolated on a solid, flat light gray background. High-quality vector graphics, sharp angular edges, flat colors, no shadows.`;
+                } else { // modern-heraldic
+                    fullPrompt = `A professional, modern soccer club crest for '${data.newName}'. The design is a **fully enclosed modern heraldic crest shape with a flat top and a pointed bottom**. The entire shape has a **white die-cut border** and a **thick, solid '${data.primaryColor}' outer boundary line**. The interior features the text '${data.newName}' in a bold sans-serif font and the year '${data.yearFounded}' below. Color scheme uses strictly '${data.primaryColor}', '${data.secondaryColor}'. The logo is isolated on a solid, flat light gray background. High-quality vector graphics, sharp geometric edges, flat colors, no shadows.`;
+                }
+
+                const negativePrompt = 'photograph of a ball, realistic person, player holding a ball, complex background, stadium, grass, gradient background, watermark, signature, gibberish, typo, misspelling, extra letters, illegible text, messy lines, low resolution, blurry, pixelated, noise, grunge';
+
+                try {
+                    const randomSeed = Math.floor(Math.random() * 2147483647);
+                    const proxyUrl = `${PROXY_URL}/api?prompt=${encodeURIComponent(fullPrompt)}&negative_prompt=${encodeURIComponent(negativePrompt)}&model=${aiModel}&width=1024&height=1024&nologo=true&enhance=false&seed=${randomSeed}`;
+                    
+                    const response = await fetch(proxyUrl, {
+                        headers: {
+                            'Authorization': `Bearer ${pollinationsKey}`
+                        }
+                    });
+                    
+                    if(!response.ok) throw new Error('Failed to generate crest');
+                    
+                    const blob = await response.blob();
+                    
+                    const objectUrl = URL.createObjectURL(blob);
+                    setCrestUrl(objectUrl);
+                    
+                    // Upload to Cloudflare Images
+                    try {
+                        const cloudflareUrl = await uploadImageToCloudflare(blob, `${data.newName}_crest.png`);
+                        setCrestCloudflareUrl(cloudflareUrl);
+                    } catch (err) {
+                        console.error('Cloudflare upload failed:', err);
+                    }
+                    
+                    setAiCrestLoading(false);
+                } catch(err) { 
+                    alert('Crest Gen Error: ' + err.message); 
+                    setAiCrestLoading(false);
+                }
+            };
+
+            const downloadCrest = async () => {
+                try {
+                    const imageUrl = crestCloudflareUrl || crestUrl;
+                    const response = await fetch(imageUrl);
+                    const blob = await response.blob();
+                    const url = URL.createObjectURL(blob);
+                    const filename = data.origID ? `${data.origID}_club.png` : 'crest.png';
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = filename;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                } catch (err) {
+                    alert('Download failed: ' + err.message);
+                }
+            };
+
+            const createFMRTEPreset = () => {
+                const homeP = hexToNormalized(data.primaryColor);
+                const homeS = hexToNormalized(data.secondaryColor);
+                const act = (p, v) => ({ "Type": "PropertyPresetAction", "TargetProperty": p, "Value": v, "ValueSetType": "Replace", "TargetType": "Club", "TargetIds": [], "ExtraParameter": null, "MaximumValue": null, "MinimumValue": null });
+                const actTeam = (p, v) => ({ "Type": "PropertyPresetAction", "TargetProperty": p, "Value": v, "ValueSetType": "Replace", "TargetType": "Team", "TargetIds": [], "ExtraParameter": null, "MaximumValue": null, "MinimumValue": null });
+
+                const fanProfiles = {
+                    hardcore: { passion: 1, loyalty: 1, temp: 1, patience: 0.2, expect: 0.5, affluence: 0.5 },
+                    family: { passion: 0.6, loyalty: 0.8, temp: 0.2, patience: 1, expect: 0.3, affluence: 0.5 },
+                    glory: { passion: 0.4, loyalty: 0.1, temp: 0.5, patience: 0, expect: 1, affluence: 0.8 },
+                    corporate: { passion: 0.3, loyalty: 0.4, temp: 0.1, patience: 0.5, expect: 0.8, affluence: 1 }
+                };
+                const selectedFan = fanProfiles[data.fanPreset] || fanProfiles.hardcore;
+
+                const preset = {
+                    "Actions": [
+                        act("Finances.Balance", getCleanValue('balance')),
+                        act("Finances.SeasonTransferBudget", getCleanValue('transferBudget')),
+                        act("Finances.RemainingTransferBudget", getCleanValue('transferBudget')),
+                        act("Finances.WageBudget", getCleanValue('wageBudget')),
+                        act("Finances.MaxWage", getCleanValue('wageBudget')),
+                        act("Finances.YouthRecruitment", getCleanValue('youthFund')),
+                        act("Reputation", data.reputation),
+                        act("AverageAttendance", getCleanValue('capacity')),
+                        act("TrainingFacilities", data.trainingFac),
+                        act("YouthFacilities", data.youthFac),
+                        act("YouthRecruitment", data.recruitment),
+                        act("YearFounded", data.yearFounded),
+                        act("SeasonTicketHolders", getCleanValue('seasonTickets')),
+                        actTeam("Stadium.Capacity", getCleanValue('capacity')),
+                        act("ProfessionalStatus", data.proStatus),
+                        act("SugarDaddyType", data.sugarDaddyType),
+                        act("SupportersProfile.Passion", selectedFan.passion),
+                        act("SupportersProfile.Loyalty", selectedFan.loyalty),
+                        act("SupportersProfile.Temperament", selectedFan.temp),
+                        act("SupportersProfile.Patience", selectedFan.patience),
+                        act("SupportersProfile.Expectations", selectedFan.expect),
+                        act("SupportersProfile.Affluence", selectedFan.affluence),
+                        act("BackgroundColor.Ah", 1), act("BackgroundColor.Ai", homeP.r), act("BackgroundColor.Aj", homeP.g), act("BackgroundColor.Ak", homeP.b),
+                        act("ForegroundColor.Ah", 1), act("ForegroundColor.Ai", homeS.r), act("ForegroundColor.Aj", homeS.g), act("ForegroundColor.Ak", homeS.b)
+                    ],
+                    "Name": `${data.newName}_Setup`,
+                    "Category": "New Club",
+                    "IsActive": true,
+                    "Order": 1
+                };
+                
+                if(data.newStadium) preset.Actions.push(actTeam("Stadium.Name", data.newStadium));
+                if(data.boostMorale) preset.Actions.push(act("Morale", 1));
+                if(data.isTrainingGround) preset.Actions.push(actTeam("Stadium.IsTrainingGround", 1));
+                return preset;
+            };
+
+            const downloadZip = async () => {
+                if(!data.origID) return alert('ID Required');
+                setLoading(true);
+                try {
+                    const zip = new window.JSZip();
+                    const safeName = data.newShort.toLowerCase().replace(/[^a-z0-9]/g, '_');
+                    
+                    zip.file(`team_creator_${safeName}.lnc`, `# FM Creator\n"CLUB_LONG_NAME_CHANGE" ${data.origID} "${data.newName}" ""\n"CLUB_SHORT_NAME_CHANGE" ${data.origID} "${data.newShort}" ""\n"CLUB_6LETTER_NAME_CHANGE" ${data.origID} "${data.newSixLetter}" ""\n`);
+                    
+                    let edt = `# FM Creator\n`;
+                    if(data.swapID) edt += `"SWAP_TEAMS" ${data.origID} ${data.swapID}\n`;
+                    if(data.randomizeSquad) edt += `"RANDOMISE_TEAM" ${data.origID}\n`;
+                    if(data.sugarDaddyType !== '0' && data.origName) edt += `"SUGAR_DADDY" "${['NONE','BACK_END','FRONT_END','UNDERWRITER'][parseInt(data.sugarDaddyType)]}" "${data.origName}" "1"\n`;
+                    if(edt.length > 20) zip.file(`team_creator_${safeName}.edt`, edt);
+                    
+                    const preset = createFMRTEPreset();
+                    zip.file(`${data.newName.replace(/ /g, '_')}_Setup.json`, JSON.stringify(preset, null, 2));
+
+                    let finalLogoBlob = logoBlob;
+                    
+                    // If we have a Cloudflare Images URL, fetch from there
+                    if (logoUrl) {
+                        try {
+                            const response = await fetch(logoUrl);
+                            if (response.ok) {
+                                finalLogoBlob = await response.blob();
+                            }
+                        } catch (err) {
+                            console.error('Failed to fetch from Cloudflare:', err);
+                            // Fall back to local blob
+                        }
+                    }
+
+                    if(finalLogoBlob) {
+                        const imgFolder = zip.folder("graphics").folder(`team_creator_${safeName}`).folder("logo");
+                        imgFolder.file(`${data.origID}_club.png`, finalLogoBlob);
+                        const xml = `<record>\n\t<boolean id="preload" value="false"/>\n\t<boolean id="amap" value="false"/>\n\t<list id="maps">\n\t\t<record from="${data.origID}_club" to="graphics/pictures/club/${data.origID}/logo"/>\n\t\t<record from="${data.origID}_club" to="graphics/pictures/club/${data.origID}/icon"/>\n\t</list>\n</record>`;
+                        imgFolder.file("config.xml", xml);
+                    }
+                    
+                    zip.file("ReadMe.txt", `FM TEAM CREATOR - INSTALL GUIDE\n\n1. EDT: Put .edt file in C:\\XboxGames\\Football Manager 26 Console\\Content\\shared\\data\\database\\db\\2600\\edt\\permanent\n2. LNC: Put .lnc file in C:\\XboxGames\\Football Manager 26 Console\\Content\\shared\\data\\database\\db\\2600\\lnc\\all\n3. GRAPHICS: Put folder in [User]\\Documents\\Sports Interactive\\Football Manager 26 Console\\graphics\n4. FMRTE: Put .json in C:\\BraCa Soft\\FMRTE 26\\Presets`);
+
+                    const content = await zip.generateAsync({type:"blob"});
+                    const link = document.createElement("a");
+                    link.href = URL.createObjectURL(content);
+                    link.download = `Team_Creator_${safeName}.zip`;
+                    link.click();
+                } catch(e) { alert(e.message); }
+                setLoading(false);
+            };
+
+            const downloadJSON = () => {
+                 const preset = createFMRTEPreset();
+                 const str = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(preset, null, 2));
+                 const dl = document.createElement('a');
+                 dl.href = str; dl.download = `${data.newName}_Setup.json`; dl.click();
+            };
+
+            return (
+                <div className="grid md:grid-cols-2 gap-8">
+                    <div className="space-y-6">
+                        <div className="flex gap-2 p-1 bg-slate-800 rounded-lg">
+                            <button onClick={() => setActiveTab('preset')} className={`px-4 py-2 rounded text-sm font-bold flex-1 ${activeTab === 'preset' ? 'bg-purple-600 text-white' : 'text-slate-400'}`}>Preset</button>
+                            <button onClick={() => setActiveTab('identity')} className={`px-4 py-2 rounded text-sm font-bold flex-1 ${activeTab === 'identity' ? 'bg-indigo-600 text-white' : 'text-slate-400'}`}>Identity</button>
+                            <button onClick={() => setActiveTab('finances')} className={`px-4 py-2 rounded text-sm font-bold flex-1 ${activeTab === 'finances' ? 'bg-emerald-600 text-white' : 'text-slate-400'}`}>Finances</button>
+                            <button onClick={() => setActiveTab('stadium')} className={`px-4 py-2 rounded text-sm font-bold flex-1 ${activeTab === 'stadium' ? 'bg-rose-600 text-white' : 'text-slate-400'}`}>Stadium</button>
+                        </div>
+
+                        {/* PRESET */}
+                        {activeTab === 'preset' && (
+                            <div className="bg-slate-800 border border-slate-700 rounded-xl p-5 space-y-4">
+                                     <div className="bg-purple-900/20 border border-purple-500/30 p-4 rounded-xl">
+                                        <label className="text-purple-400 text-xs font-bold uppercase mb-2 block">Quick Start</label>
+                                        <div className="grid grid-cols-4 gap-2">
+                                            {[{size: 'small', label: 'Small'}, {size: 'medium', label: 'Medium'}, {size: 'big', label: 'Big'}, {size: 'elite', label: 'Elite'}].map(preset => (
+                                                <button key={preset.size} onClick={() => handlePreset(preset.size)} className="bg-slate-800 hover:bg-purple-600 text-slate-300 py-1 px-2 rounded text-xs border border-slate-600">{preset.label}</button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                    <div className="bg-pink-900/20 border border-pink-500/30 p-4 rounded-xl space-y-4">
+                                        <div className="flex items-center justify-between mb-2">
+                                            <label className="text-pink-400 text-xs font-bold uppercase">AI Generator</label>
+                                            <span className="text-[10px] bg-emerald-600/20 text-emerald-400 px-2 py-0.5 rounded-full border border-emerald-600/30">Google Gemini 2.5 Flash Lite (12k uses/💎)</span>
+                                        </div>
+                                        <textarea name="aiPrompt" value={data.aiPrompt} onChange={handleChange} rows={3} className="w-full bg-slate-900 border border-slate-600 rounded p-2 text-sm text-white" placeholder="Enter club description..." />
+                                        <button onClick={generateAI} disabled={aiLoading} className="w-full bg-pink-600 hover:bg-pink-500 text-white font-bold py-3 rounded-lg flex justify-center gap-2">{aiLoading ? <div className="spinner"></div> : <Icon name="Cpu"/>} Auto-Fill</button>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* IDENTITY */}
+                            {activeTab === 'identity' && (
+                                <div className="bg-slate-800 border border-slate-700 rounded-xl p-5 space-y-4">
+                                    <div className="mb-4 pb-4 border-b border-slate-600">
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <IdLookupField 
+                                                label="Replace Club ID*"
+                                                value={data.origID}
+                                                onChange={handleChange}
+                                                placeholder="Replace Club ID*"
+                                                name="origID"
+                                                clubNameField="origName"
+                                            />
+                                            <div><label className="text-xs text-slate-400 block mb-1">Replace Club Name</label><input type="text" name="origName" value={data.origName} onChange={handleChange} placeholder="Replace Club Name" className="w-full bg-slate-900 border border-slate-600 rounded p-2 text-sm text-white"/></div>
+                                        </div>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div><label className="text-xs text-slate-400 block mb-1">New Club Name</label><input type="text" name="newName" value={data.newName} onChange={handleChange} placeholder="New Club Name" className="w-full bg-slate-900 border border-slate-600 rounded p-2 text-sm text-white"/></div>
+                                        <div><label className="text-xs text-slate-400 block mb-1">Professional Status</label><select name="proStatus" value={data.proStatus} onChange={handleChange} className="w-full bg-slate-900 border border-slate-600 rounded p-2 text-sm text-white">
+                                            <option value="0">Amateur</option><option value="1">Semi-Professional</option><option value="2">Professional</option>
+                                        </select></div>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div><label className="text-xs text-slate-400 block mb-1">Short Name</label><input type="text" name="newShort" value={data.newShort} onChange={handleChange} placeholder="Short Name" className="w-full bg-slate-900 border border-slate-600 rounded p-2 text-sm text-white"/></div>
+                                        <div><label className="text-xs text-slate-400 block mb-1">Scoreboard Code (6)</label><input type="text" name="newSixLetter" value={data.newSixLetter} onChange={handleChange} placeholder="Code" maxLength={6} className="w-full bg-slate-900 border border-slate-600 rounded p-2 text-sm text-white uppercase"/></div>
+                                    </div>
+                                    <div className="space-y-1">
+                                        <label className="text-xs text-slate-400">Fan Profile</label>
+                                        <select name="fanPreset" value={data.fanPreset} onChange={handleChange} className="w-full bg-slate-900 border border-slate-600 rounded p-2 text-sm text-white">
+                                            <option value="hardcore">Hardcore</option><option value="family">Family</option><option value="glory">Glory Hunters</option><option value="corporate">Corporate</option>
+                                        </select>
+                                    </div>
+                                    <div className="space-y-1">
+                                        <label className="text-xs text-slate-400">Crest Style</label>
+                                        <select name="crestStyle" value={data.crestStyle} onChange={handleChange} className="w-full bg-slate-900 border border-slate-600 rounded p-2 text-sm text-white">
+                                            <option value="classic-shield">Classic Shield</option>
+                                            <option value="circular-roundel">Circular Roundel (Manchester City, PSG, Chelsea)</option>
+                                            <option value="dynamic-diamond">Dynamic Diamond (Bundesliga, Werder Bremen)</option>
+                                            <option value="modern-heraldic">Modern Heraldic Crest (MLS teams)</option>
+                                        </select>
+                                    </div>
+                                    <div className="pt-4 border-t border-slate-700">
+                                        <label className="text-xs text-slate-400 mb-2 block">Team Colors</label>
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div>
+                                                <label className="text-[10px] text-slate-500 block mb-1">Primary</label>
+                                                <div className="flex gap-2">
+                                                    <input type="color" name="primaryColor" value={data.primaryColor} onChange={handleChange} className="w-12 h-8 bg-transparent cursor-pointer rounded" />
+                                                    <input type="text" name="primaryColor" value={data.primaryColor} onChange={handleChange} placeholder="#ff0000" maxLength={7} className="flex-1 bg-slate-900 border border-slate-600 rounded px-2 text-xs text-white uppercase" />
+                                                </div>
+                                            </div>
+                                            <div>
+                                                <label className="text-[10px] text-slate-500 block mb-1">Secondary</label>
+                                                <div className="flex gap-2">
+                                                    <input type="color" name="secondaryColor" value={data.secondaryColor} onChange={handleChange} className="w-12 h-8 bg-transparent cursor-pointer rounded" />
+                                                    <input type="text" name="secondaryColor" value={data.secondaryColor} onChange={handleChange} placeholder="#ffffff" maxLength={7} className="flex-1 bg-slate-900 border border-slate-600 rounded px-2 text-xs text-white uppercase" />
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center gap-3 p-3 bg-slate-800 rounded border border-slate-700">
+                                        <input type="checkbox" name="randomizeSquad" checked={data.randomizeSquad} onChange={handleChange} className="w-4 h-4 accent-purple-600"/>
+                                        <span className="text-sm text-white">Randomize Squad</span>
+                                    </div>
+                                </div>
+                            )}
+
+                             {/* FINANCES */}
+                             {activeTab === 'finances' && (
+                                <div className="bg-slate-800 border border-slate-700 rounded-xl p-5 space-y-4">
+                                    <div><label className="text-xs text-slate-400">Balance</label><input type="text" name="balance" value={data.balance} onChange={handleChange} className="w-full bg-slate-900 border border-slate-600 rounded p-2 text-sm text-white"/></div>
+                                    <div><label className="text-xs text-slate-400">Transfer Budget</label><input type="text" name="transferBudget" value={data.transferBudget} onChange={handleChange} className="w-full bg-slate-900 border border-slate-600 rounded p-2 text-sm text-white"/></div>
+                                    <div><label className="text-xs text-slate-400">Wage Budget</label><input type="text" name="wageBudget" value={data.wageBudget} onChange={handleChange} className="w-full bg-slate-900 border border-slate-600 rounded p-2 text-sm text-white"/></div>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div><label className="text-xs text-slate-400">Reputation (1-10000)</label><input type="number" name="reputation" value={data.reputation} onChange={handleChange} className="w-full bg-slate-900 border border-slate-600 rounded p-2 text-sm text-white"/></div>
+                                        <div><label className="text-xs text-slate-400">Youth Funding</label><input type="text" name="youthFund" value={data.youthFund} onChange={handleChange} className="w-full bg-slate-900 border border-slate-600 rounded p-2 text-sm text-white"/></div>
+                                    </div>
+                                    <div><label className="text-xs text-slate-400">Sugar Daddy</label><select name="sugarDaddyType" value={data.sugarDaddyType} onChange={handleChange} className="w-full bg-slate-900 border border-slate-600 rounded p-2 text-sm text-white"><option value="0">None</option><option value="1">Background (Back-End)</option><option value="2">Foreground (Front-End)</option><option value="3">Underwriter</option></select></div>
+                                    <div className="flex items-center gap-2 pt-2"><input type="checkbox" name="boostMorale" checked={data.boostMorale} onChange={handleChange} /><span className="text-sm text-white">Maximize Morale</span></div>
+                                </div>
+                            )}
+
+                            {/* STADIUM */}
+                            {activeTab === 'stadium' && (
+                                <div className="bg-slate-800 border border-slate-700 rounded-xl p-5 space-y-4">
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div><label className="text-xs text-slate-400 block mb-1">Stadium Name</label><input type="text" name="newStadium" value={data.newStadium} onChange={handleChange} placeholder="Stadium Name" className="w-full bg-slate-900 border border-slate-600 rounded p-2 text-sm text-white"/></div>
+                                        <div><label className="text-xs text-slate-400 block mb-1">Capacity</label><input type="text" name="capacity" value={data.capacity} onChange={handleChange} placeholder="Capacity" className="w-full bg-slate-900 border border-slate-600 rounded p-2 text-sm text-white"/></div>
+                                    </div>
+                                    <div className="grid grid-cols-3 gap-2">
+                                        <div><label className="text-xs text-slate-400 block mb-1">Training Facilities (1-20)</label><input type="number" name="trainingFac" value={data.trainingFac} onChange={handleChange} placeholder="Train" max={20} className="w-full bg-slate-900 border border-slate-600 rounded p-2 text-sm text-white"/></div>
+                                        <div><label className="text-xs text-slate-400 block mb-1">Youth Facilities (1-20)</label><input type="number" name="youthFac" value={data.youthFac} onChange={handleChange} placeholder="Youth" max={20} className="w-full bg-slate-900 border border-slate-600 rounded p-2 text-sm text-white"/></div>
+                                        <div><label className="text-xs text-slate-400 block mb-1">Youth Recruitment (1-20)</label><input type="number" name="recruitment" value={data.recruitment} onChange={handleChange} placeholder="Recruit" max={20} className="w-full bg-slate-900 border border-slate-600 rounded p-2 text-sm text-white"/></div>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div><label className="text-xs text-slate-400 block mb-1">Year Founded</label><input type="number" name="yearFounded" value={data.yearFounded} onChange={handleChange} placeholder="Year Founded" className="w-full bg-slate-900 border border-slate-600 rounded p-2 text-sm text-white"/></div>
+                                        <div><label className="text-xs text-slate-400 block mb-1">Season Ticket Holders</label><input type="text" name="seasonTickets" value={data.seasonTickets} onChange={handleChange} placeholder="Season Tickets" className="w-full bg-slate-900 border border-slate-600 rounded p-2 text-sm text-white"/></div>
+                                    </div>
+                                    <div className="flex items-center gap-2 pt-2"><input type="checkbox" name="isTrainingGround" checked={data.isTrainingGround} onChange={handleChange} /><span className="text-sm text-white">Use As Training Ground</span></div>
+                                    <div className="pt-4 border-t border-slate-700">
+                                        <label className="text-xs text-blue-400 font-bold mb-2 block">League Swap (Optional)</label>
+                                        <IdLookupField 
+                                            label=""
+                                            value={data.swapID}
+                                            onChange={handleChange}
+                                            placeholder="Target League Team ID"
+                                            name="swapID"
+                                        />
+                                    </div>
+                                </div>
+                            )}
+                            
+                        </div>
+
+                        <div className="space-y-6">
+                            <div className="bg-slate-800 border border-slate-700 rounded-xl p-5">
+                                <h3 className="text-pink-400 text-xs font-bold uppercase mb-4 text-center">AI Crest Generator</h3>
+                                
+                                {!pollinationsKey ? (
+                                    <div className="bg-blue-600/10 border border-blue-600/30 rounded-xl p-4 space-y-3 mb-4">
+                                        <p className="text-sm text-blue-400">
+                                            <Icon name="lock" className="mr-2" />
+                                            Connect your Pollinations account to generate AI crests
+                                        </p>
+                                        <button 
+                                            onClick={() => {
+                                                const currentUrl = window.location.href.split('#')[0];
+                                                window.location.href = `https://enter.pollinations.ai/authorize?redirect_url=${encodeURIComponent(currentUrl)}`;
+                                            }}
+                                            className="w-full bg-blue-600 hover:bg-blue-500 text-white py-2 rounded text-sm font-bold flex justify-center items-center gap-2"
+                                        >
+                                            <Icon name="key" /> Connect Account
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <div className="bg-green-600/10 border border-green-600/30 rounded-xl p-3 mb-4">
+                                        <p className="text-xs text-green-400 flex items-center gap-2">
+                                            <Icon name="check-circle" /> Connected to Pollinations
+                                        </p>
+                                    </div>
+                                )}
+                                
+                                {(crestCloudflareUrl || crestUrl) ? (
+                                    <img src={crestCloudflareUrl || crestUrl} className="w-64 h-64 rounded-lg mx-auto mb-4 object-cover border border-slate-600" />
+                                ) : (
+                                    <div className="w-64 h-64 bg-black/30 rounded-lg mx-auto mb-4 flex items-center justify-center text-slate-600">
+                                        <Icon name="camera" size={48}/>
+                                    </div>
+                                )}
+                                
+                                <div className="mb-3">
+                                    <label className="text-xs text-slate-400 block mb-2 text-left">AI Model</label>
+                                    <select value={aiModel} onChange={e=>setAiModel(e.target.value)} disabled={!pollinationsKey} className="w-full bg-slate-900 border border-slate-600 rounded p-2 text-sm text-white disabled:opacity-50 disabled:cursor-not-allowed">
+                                        <option value="gptimage-large">GPT Image 1.5 (40 images/💎)</option>
+                                        <option value="kontext">FLUX.1 Kontext (25 images/💎)</option>
+                                        <option value="seedream-pro">Seedream 4.5 Pro (25 images/💎)</option>
+                                        <option value="nanobanana-pro">NanoBanana Pro (10 images/💎)</option>
+                                    </select>
+                                    <p className="text-[10px] text-slate-500 mt-1">💎 (Pollen) is Pollinations' credit system. Free account includes credits.</p>
+                                </div>
+                                
+                                <button onClick={generateCrestAI} disabled={aiCrestLoading || !pollinationsKey} className="w-full bg-pink-600 hover:bg-pink-500 text-white py-2 rounded text-sm font-bold flex justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
+                                    {aiCrestLoading ? 'Generating...' : 'Generate Crest'}
+                                </button>
+                                {(crestCloudflareUrl || crestUrl) && (
+                                    <button onClick={downloadCrest} className="block w-full mt-2 text-xs text-blue-400 hover:underline text-center cursor-pointer bg-transparent border-none">Download Image</button>
+                                )}
+                            </div>
+
+                            <div className="mt-4">
+                                <div className="flex items-center gap-2 mb-2 text-xs text-slate-500">
+                                    <div className="flex-1 border-t border-slate-700"></div>
+                                    <span>Export</span>
+                                    <div className="flex-1 border-t border-slate-700"></div>
+                                </div>
+                                <div className="space-y-3">
+                                    <button onClick={downloadZip} disabled={loading} className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 px-6 rounded-xl shadow-lg flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
+                                        {loading ? 'Generating...' : <><Icon name="download" /> Download Full ZIP</>}
+                                    </button>
+                                    <button onClick={downloadJSON} className="w-full text-slate-400 hover:text-white hover:bg-slate-700 py-2 px-4 rounded-xl border border-slate-600 text-sm font-medium flex items-center justify-center gap-2">
+                                        <img src="https://www.fmrte.com/uploads/monthly_2025_10/fmrte-26-512.png" alt="FMRTE 26" className="w-5 h-5 rounded" />
+                                        JSON Only
+                                    </button>
+                                    
+                                    <button onClick={saveSettings} className="w-full bg-blue-600 hover:bg-blue-500 text-white font-semibold py-2 rounded-xl flex items-center justify-center gap-2">
+                                        <Icon name="floppy-disk" /> Save Settings as Default
+                                    </button>
+                                    
+                                    {saveNotification && (
+                                        <div className="bg-green-600/20 text-green-400 border border-green-600/30 px-3 py-2 rounded-lg text-center text-xs font-semibold animate-pulse">
+                                            ✓ Settings saved successfully!
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* Instructions */}
+                            <div className="mt-6 p-4 bg-slate-950 rounded-xl border border-slate-600">
+                                <h4 className="text-sm font-bold text-blue-400 mb-2">📖 How to Use</h4>
+                                <ul className="text-xs text-slate-400 space-y-1 list-disc list-inside">
+                                    <li>Customize your club details, colors, and stadium information above (Or use AI to generate them)</li>
+                                    <li>Use AI Crest Generator (if connected to Pollinations)</li>
+                                    <li>Click "Download Full ZIP" to get a complete package with all files</li>
+                                    <li>Extract the ZIP file contents</li>
+                                    <li>Place the graphics folder in: <code className="bg-slate-900 px-2 py-0.5 rounded">\Documents\Sports Interactive\Football Manager 26 Console\</code></li>
+                                    <li>Place the .edt file in: <code className="bg-slate-900 px-2 py-0.5 rounded">C:\XboxGames\Football Manager 26 Console\Content\shared\data\database\db\2600\edt\permanent</code></li>
+                                    <li>Place the .lnc file in: <code className="bg-slate-900 px-2 py-0.5 rounded">C:\XboxGames\Football Manager 26 Console\Content\shared\data\database\db\2600\lnc\all</code></li>
+                                    <li>Place the JSON file in: <code className="bg-slate-900 px-2 py-0.5 rounded">C:\BraCa Soft\FMRTE 26\Presets</code></li>
+                                    <li>Use <strong>FMRTE 26</strong> to import the JSON preset ingame after loading the saveto complete your club setup</li>
+                                    <li>Start a new career to see your custom club in action!</li>
+                                </ul>
+                            </div>
+                        </div>
+                </div>
+            );
+        };
+
+        // ==========================================
+        // COMPONENT: REGEN CREATOR
+        // ==========================================
+        const RegenCreator = ({ pollinationsKey }) => {
+            const [rData, setRData] = useState({
+                firstName: '', lastName: '', commonName: '',
+                dobInput: '2010-01-01', dobRandom: false,
+                nation: '784', nationRandom: false, birthCity: 'Amsterdam',
+                skinTone: '10', skinToneRandom: false, ethnicity: '',
+                hairColour: '1', haircut: '', gender: 'MALE', height: '175', weight: '68', foot: '3', position: 'MIDFIELDER_CENTRAL',
+                ca: '85', paMode: 'dynamic', pa_dynamic: '-10', pa_custom: '170',
+                clubId: '', favTeam: '', aiModel: 'flux'
+            });
+            const [activeTab, setActiveTab] = useState('personal');
+            const [faceLoading, setFaceLoading] = useState(false);
+            const [faceUrl, setFaceUrl] = useState(null);
+            const [faceCloudflareUrl, setFaceCloudflareUrl] = useState(null);
+            const [saveNotification, setSaveNotification] = useState(false);
+            const [zipLoading, setZipLoading] = useState(false);
+
+            // Load saved settings on mount
+            useEffect(() => {
+                const saved = localStorage.getItem('fm_regen_settings');
+                if (saved) {
+                    try {
+                        setRData(JSON.parse(saved));
+                    } catch (e) {
+                        console.error('Failed to load saved settings:', e);
+                    }
+                }
+            }, []);
+
+            const updateRData = (key, val) => setRData(p => ({ ...p, [key]: val }));
+            
+            const saveSettings = () => {
+                localStorage.setItem('fm_regen_settings', JSON.stringify(rData));
+                setSaveNotification(true);
+                setTimeout(() => setSaveNotification(false), 2000);
+            };
+            
+            const getRegenCommand = () => {
+                const dob = rData.dobRandom ? "" : rData.dobInput.split('-').reverse().join('/');
+                const nation = rData.nationRandom ? "" : rData.nation;
+                const skin = rData.skinToneRandom ? "" : rData.skinTone;
+                const pa = rData.paMode === 'dynamic' ? rData.pa_dynamic : rData.pa_custom;
+                return `"DETAILED_FUTURE_REGEN" "${rData.firstName}" "${rData.commonName}" "${rData.lastName}" "${dob}" "${nation}" "${rData.favTeam}" "${rData.ethnicity}" "${skin}" "${rData.hairColour}" "${rData.height}" "${rData.weight}" "${rData.foot}" "${rData.position}" "" "${rData.birthCity}" "${rData.ca}" "${pa}" "${rData.clubId}" "${rData.gender}"`;
+            };
+
+            const downloadRegen = () => {
+                const fname = rData.firstName || "regen";
+                const content = `# FM26 Regen\r\n${getRegenCommand()}`;
+                const blob = new Blob([content], {type: "text/plain"});
+                const link = document.createElement("a");
+                link.href = URL.createObjectURL(blob);
+                link.download = `${fname}_regen.edt`;
+                link.click();
+            };
+
+            const downloadRegenZip = async () => {
+                setZipLoading(true);
+                try {
+                    const zip = new window.JSZip();
+                    const fname = rData.firstName || "regen";
+                    const safeName = fname.toLowerCase().replace(/[^a-z0-9]/g, '_');
+                    
+                    // Add .edt file
+                    const content = `# FM26 Regen\r\n${getRegenCommand()}`;
+                    zip.file(`${safeName}_regen.edt`, content);
+                    
+                    // Add face image if available
+                    if (faceCloudflareUrl || faceUrl) {
+                        try {
+                            const imageUrl = faceCloudflareUrl || faceUrl;
+                            const response = await fetch(imageUrl);
+                            if (response.ok) {
+                                const faceBlob = await response.blob();
+                                const imgFolder = zip.folder("graphics").folder(`regen_${safeName}`).folder("faces");
+                                imgFolder.file(`${safeName}_face.png`, faceBlob);
+                                
+                                // Add config.xml for the face
+                                const xml = `<record>\n\t<boolean id="preload" value="false"/>\n\t<boolean id="amap" value="false"/>\n\t<list id="maps">\n\t\t<record from="${safeName}_face" to="graphics/pictures/person/default/portrait"/>\n\t</list>\n</record>`;
+                                imgFolder.file("config.xml", xml);
+                            }
+                        } catch (err) {
+                            console.error('Failed to add face to ZIP:', err);
+                        }
+                    }
+                    
+                    // Add readme
+                    zip.file("ReadMe.txt", `FM REGEN CREATOR - INSTALL GUIDE\n\n1. EDT: Put .edt file in C:\\XboxGames\\Football Manager 26 Console\\Content\\shared\\data\\database\\db\\2600\\edt\\permanent\n2. GRAPHICS: Put folder in [User]\\Documents\\Sports Interactive\\Football Manager 26 Console\\graphics\n\nNote: The .edt file contains the player creation command. Load it in your save to create the regen.`);
+                    
+                    const zipBlob = await zip.generateAsync({type: "blob"});
+                    const link = document.createElement("a");
+                    link.href = URL.createObjectURL(zipBlob);
+                    link.download = `Regen_${safeName}.zip`;
+                    link.click();
+                } catch (e) {
+                    alert('ZIP Error: ' + e.message);
+                }
+                setZipLoading(false);
+            };
+
+            const generateFace = async () => {
+                // Require authentication
+                if (!pollinationsKey) {
+                    const currentUrl = window.location.href.split('#')[0];
+                    window.location.href = `https://enter.pollinations.ai/authorize?redirect_url=${encodeURIComponent(currentUrl)}`;
+                    return;
+                }
+                
+                setFaceLoading(true);
+                
+                // Calculate age from date of birth
+                const birthYear = rData.dobRandom ? 2002 : parseInt(rData.dobInput.split('-')[0]);
+                const age = 2026 - birthYear;
+                
+                // Map ethnicity codes to descriptive terms
+                const ethnicityMap = {
+                    '0': 'Northern European and Caucasian',
+                    '1': 'Mediterranean and Southern European',
+                    '2': 'North African and Middle Eastern',
+                    '3': 'African and Sub-Saharan',
+                    '4': 'South Asian and Indian subcontinent',
+                    '5': 'Southeast Asian',
+                    '9': 'Mixed ethnicity',
+                    '10': 'East Asian',
+                    '': 'diverse'
+                };
+                
+                // Map hair color codes to descriptive terms
+                const hairColorMap = {
+                    '1': 'blonde hair',
+                    '2': 'light brown hair',
+                    '3': 'dark brown hair',
+                    '4': 'red ginger hair',
+                    '5': 'black hair',
+                    '7': 'bald shaved head',
+                    '': 'natural hair color'
+                };
+                
+                const ethnicityDesc = ethnicityMap[rData.ethnicity] || 'diverse';
+                const hairDesc = hairColorMap[rData.hairColour] || 'natural hair color';
+                
+                // Map skin tone to descriptive text based on ethnicity
+                const skinToneDescriptions = {
+                    '0': {
+                        '1-5': 'Porcelain, cool rosy skin',
+                        '6-10': 'Fair, ivory-toned skin',
+                        '11-15': 'Light peach, sun-kissed skin',
+                        '16-20': 'Tanned, bronzed skin'
+                    },
+                    '1': {
+                        '1-5': 'Pale, creamy ivory skin',
+                        '6-10': 'Light olive, warm beige skin',
+                        '11-15': 'Deep olive, golden-tan skin',
+                        '16-20': 'Rich bronze, sun-baked skin'
+                    },
+                    '2': {
+                        '1-5': 'Fair, golden-ivory skin',
+                        '6-10': 'Warm sand, olive-toned skin',
+                        '11-15': 'Honey-bronze, amber skin',
+                        '16-20': 'Rich terracotta, deep mocha skin'
+                    },
+                    '3': {
+                        '1-5': 'Soft coffee, light cocoa skin',
+                        '6-10': 'Warm walnut, caramel skin',
+                        '11-15': 'Rich mahogany, deep brown skin',
+                        '16-20': 'Deep ebony, obsidian skin'
+                    },
+                    '4': {
+                        '1-5': 'Fair, warm wheat skin',
+                        '6-10': 'Golden-beige, honey skin',
+                        '11-15': 'Rich almond, toasted nut skin',
+                        '16-20': 'Deep bronze, dark cocoa skin'
+                    },
+                    '5': {
+                        '1-5': 'Pale gold, warm ivory skin',
+                        '6-10': 'Luminous ochre, golden skin',
+                        '11-15': 'Warm honey, bronze skin',
+                        '16-20': 'Rich sepia, deep tanned skin'
+                    },
+                    '10': {
+                        '1-5': 'Pale gold, rice-beige skin',
+                        '6-10': 'Warm peach, golden skin',
+                        '11-15': 'Toasted honey, amber skin',
+                        '16-20': 'Deep bronze, sun-darkened skin'
+                    },
+                    '9': {
+                        '1-5': 'Neutral fair skin',
+                        '6-10': 'Light-medium beige skin',
+                        '11-15': 'Warm tan, caramel skin',
+                        '16-20': 'Rich, deep brown skin'
+                    },
+                    '': {
+                        '1-5': 'Neutral fair skin',
+                        '6-10': 'Light-medium beige skin',
+                        '11-15': 'Warm tan, caramel skin',
+                        '16-20': 'Rich, deep brown skin'
+                    }
+                };
+
+                const skinTone = parseInt(rData.skinTone);
+                const ethnicity = rData.ethnicity || '';
+                let skinDesc;
+                
+                if (skinTone >= 1 && skinTone <= 5) {
+                    skinDesc = (skinToneDescriptions[ethnicity] || skinToneDescriptions[''])['1-5'];
+                } else if (skinTone >= 6 && skinTone <= 10) {
+                    skinDesc = (skinToneDescriptions[ethnicity] || skinToneDescriptions[''])['6-10'];
+                } else if (skinTone >= 11 && skinTone <= 15) {
+                    skinDesc = (skinToneDescriptions[ethnicity] || skinToneDescriptions[''])['11-15'];
+                } else {
+                    skinDesc = (skinToneDescriptions[ethnicity] || skinToneDescriptions[''])['16-20'];
+                }
+                
+                // Get nationality name from nation ID
+                const nationality = rData.nationRandom ? 'international' : (nationsData.find(n => n.id === rData.nation)?.name || 'international');
+                
+                // Include haircut in prompt if selected
+                const haircutDesc = rData.haircut ? `, ${rData.haircut}` : '';
+                
+                // Build detailed prompt
+                const desc = `A hyper-realistic, medium-shot studio portrait of a ${age} years old, professional ${rData.gender.toLowerCase()} soccer player of ${ethnicityDesc} descent from ${nationality} with ${skinDesc} looking directly at the camera. ${hairDesc}${haircutDesc}. Wearing a soccer jersey with realistic fabric texture, mesh details, and subtle stitching. The lighting is professional cinematic studio lighting: a soft key light from the front-left to define facial features, and a cool rim light backlighting the hair to separate them from the background. The skin texture is imperfect and highly detailed: visible pores, slight skin tone variations, minute stubble or peach fuzz, and natural subsurface scattering. No plastic smoothness. Expression is focused and neutral-positive. The background is a plain, solid neutral grey, out of focus. Shot on a Sony A7R IV, 85mm portrait lens, f/1.8, sharp focus on the eyes, 8k resolution, raw photo quality, Fujifilm color science.`;
+                
+                const negativePrompt = '3d render, cgi, cartoon, anime, illustration, painting, drawing, plastic skin, wax doll, smooth skin, low quality, blurry, distorted, bad anatomy, deformed, ugly, cross-eyed, strabismus, squinting, lazy eye, asymmetric eyes, malformed pupils, zombie, dead eyes, watermark, text, signature';
+                
+                try {
+                    const randomSeed = Math.floor(Math.random() * 2147483647);
+                    const proxyUrl = `${PROXY_URL}/api?prompt=${encodeURIComponent(desc)}&negative_prompt=${encodeURIComponent(negativePrompt)}&model=${rData.aiModel}&width=2048&height=2048&nologo=true&safe=false&quality=hd&seed=${randomSeed}`;
+                    
+                    const response = await fetch(proxyUrl, {
+                        headers: {
+                            'Authorization': `Bearer ${pollinationsKey}`
+                        }
+                    });
+                    
+                    if(!response.ok) throw new Error('Failed to generate face image');
+                    
+                    const blob = await response.blob();
+                    
+                    const objectUrl = URL.createObjectURL(blob);
+                    setFaceUrl(objectUrl);
+                    
+                    // Upload to Cloudflare Images
+                    try {
+                        const cloudflareUrl = await uploadImageToCloudflare(blob, `${rData.firstName}_${rData.lastName}_face.png`);
+                        setFaceCloudflareUrl(cloudflareUrl);
+                    } catch (err) {
+                        console.error('Face upload failed:', err);
+                    }
+                    
+                    setFaceLoading(false);
+                } catch(e) { 
+                    alert('Face Gen Error: ' + e.message); 
+                    setFaceLoading(false);
+                }
+            };
+
+            const downloadFace = async () => {
+                try {
+                    const imageUrl = faceCloudflareUrl || faceUrl;
+                    const response = await fetch(imageUrl);
+                    const blob = await response.blob();
+                    
+                    // Create ZIP with graphics folder structure
+                    const zip = new window.JSZip();
+                    const tempId = `newgen_${Date.now()}`;
+                    const imgFolder = zip.folder("graphics").folder("newgens").folder("faces");
+                    imgFolder.file(`${tempId}.png`, blob);
+                    
+                    // Add config.xml
+                    const xml = `<record>\n\t<boolean id="preload" value="false"/>\n\t<boolean id="amap" value="false"/>\n\t<list id="maps">\n\t\t<record from="${tempId}" to="graphics/pictures/person/default/portrait"/>\n\t</list>\n</record>`;
+                    imgFolder.file("config.xml", xml);
+                    
+                    // Add readme
+                    zip.file("ReadMe.txt", `FM26 PORTRAIT PACK\n\nInstallation:\n1. Extract the graphics folder to your Documents\\Sports Interactive\\Football Manager 26 Console\\ directory\n2. The portrait will be available in-game for newgens\n3. Reload graphics cache in FM26 if needed (Preferences > Advanced > Reload Skin)`);
+                    
+                    // Generate and download ZIP
+                    const zipBlob = await zip.generateAsync({type: "blob"});
+                    const url = URL.createObjectURL(zipBlob);
+                    const filename = `Portrait_${tempId}.zip`;
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = filename;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                } catch (err) {
+                    alert('Download failed: ' + err.message);
+                }
+            };
+
+            // Get ethnicity-aware skin color for preview
+            const getSkinColor = () => {
+                const skinTone = parseInt(rData.skinTone);
+                const ethnicity = rData.ethnicity || '';
+                
+                // Define ethnicity-specific color ranges (hue, saturation, base lightness)
+                const ethnicityColors = {
+                    '0': { // Northern European - cool rosy tones
+                        hue: 15,
+                        satRange: [25, 35, 30, 25],  // sat for each range
+                        lightRange: [92, 85, 75, 60] // lightness for each range
+                    },
+                    '1': { // Mediterranean - olive/warm beige
+                        hue: 30,
+                        satRange: [30, 40, 45, 50],
+                        lightRange: [90, 80, 65, 50]
+                    },
+                    '2': { // Middle Eastern/North African - golden/amber
+                        hue: 35,
+                        satRange: [35, 45, 50, 50],
+                        lightRange: [88, 75, 58, 42]
+                    },
+                    '3': { // African - deep brown
+                        hue: 25,
+                        satRange: [35, 40, 35, 30],
+                        lightRange: [70, 55, 35, 20]
+                    },
+                    '4': { // South Asian - warm wheat/almond
+                        hue: 32,
+                        satRange: [30, 38, 42, 40],
+                        lightRange: [85, 72, 55, 38]
+                    },
+                    '5': { // Southeast Asian - golden/ochre
+                        hue: 35,
+                        satRange: [35, 45, 48, 45],
+                        lightRange: [88, 75, 60, 45]
+                    },
+                    '10': { // East Asian - peachy/golden
+                        hue: 28,
+                        satRange: [28, 38, 42, 40],
+                        lightRange: [90, 78, 62, 48]
+                    },
+                    '9': { // Mixed - neutral
+                        hue: 28,
+                        satRange: [30, 35, 38, 35],
+                        lightRange: [88, 75, 58, 40]
+                    },
+                    '': { // Random/Default - neutral
+                        hue: 28,
+                        satRange: [30, 35, 38, 35],
+                        lightRange: [88, 75, 58, 40]
+                    }
+                };
+
+                const colorData = ethnicityColors[ethnicity] || ethnicityColors[''];
+                let rangeIndex,sat, light;
+                
+                if (skinTone >= 1 && skinTone <= 5) {
+                    rangeIndex = 0;
+                    // Interpolate within range
+                    const progress = (skinTone - 1) / 4;
+                    sat = colorData.satRange[0];
+                    light = colorData.lightRange[0] - (progress * (colorData.lightRange[0] - colorData.lightRange[1]) / 2);
+                } else if (skinTone >= 6 && skinTone <= 10) {
+                    rangeIndex = 1;
+                    const progress = (skinTone - 6) / 4;
+                    sat = colorData.satRange[1];
+                    light = colorData.lightRange[1] - (progress * (colorData.lightRange[1] - colorData.lightRange[2]) / 2);
+                } else if (skinTone >= 11 && skinTone <= 15) {
+                    rangeIndex = 2;
+                    const progress = (skinTone - 11) / 4;
+                    sat = colorData.satRange[2];
+                    light = colorData.lightRange[2] - (progress * (colorData.lightRange[2] - colorData.lightRange[3]) / 2);
+                } else {
+                    rangeIndex = 3;
+                    const progress = (skinTone - 16) / 4;
+                    sat = colorData.satRange[3];
+                    light = colorData.lightRange[3] - (progress * 5); // Darken further
+                }
+
+                return `hsl(${colorData.hue}, ${sat}%, ${light}%)`;
+            };
+
+            const skinColor = getSkinColor();
+
+            // Get skin tone description for display
+            const getSkinToneDescription = () => {
+                const skinToneDescriptions = {
+                    '0': {
+                        '1-5': 'Porcelain, cool rosy',
+                        '6-10': 'Fair, ivory-toned',
+                        '11-15': 'Light peach, sun-kissed',
+                        '16-20': 'Tanned, bronzed'
+                    },
+                    '1': {
+                        '1-5': 'Pale, creamy ivory',
+                        '6-10': 'Light olive, warm beige',
+                        '11-15': 'Deep olive, golden-tan',
+                        '16-20': 'Rich bronze, sun-baked'
+                    },
+                    '2': {
+                        '1-5': 'Fair, golden-ivory',
+                        '6-10': 'Warm sand, olive-toned',
+                        '11-15': 'Honey-bronze, amber',
+                        '16-20': 'Rich terracotta, deep mocha'
+                    },
+                    '3': {
+                        '1-5': 'Soft coffee, light cocoa',
+                        '6-10': 'Warm walnut, caramel',
+                        '11-15': 'Rich mahogany, deep brown',
+                        '16-20': 'Deep ebony, obsidian'
+                    },
+                    '4': {
+                        '1-5': 'Fair, warm wheat',
+                        '6-10': 'Golden-beige, honey',
+                        '11-15': 'Rich almond, toasted nut',
+                        '16-20': 'Deep bronze, dark cocoa'
+                    },
+                    '5': {
+                        '1-5': 'Pale gold, warm ivory',
+                        '6-10': 'Luminous ochre, golden',
+                        '11-15': 'Warm honey, bronze',
+                        '16-20': 'Rich sepia, deep tanned'
+                    },
+                    '10': {
+                        '1-5': 'Pale gold, rice-beige',
+                        '6-10': 'Warm peach, golden',
+                        '11-15': 'Toasted honey, amber',
+                        '16-20': 'Deep bronze, sun-darkened'
+                    },
+                    '9': {
+                        '1-5': 'Neutral fair',
+                        '6-10': 'Light-medium beige',
+                        '11-15': 'Warm tan, caramel',
+                        '16-20': 'Rich, deep brown'
+                    },
+                    '': {
+                        '1-5': 'Neutral fair',
+                        '6-10': 'Light-medium beige',
+                        '11-15': 'Warm tan, caramel',
+                        '16-20': 'Rich, deep brown'
+                    }
+                };
+
+                const skinTone = parseInt(rData.skinTone);
+                const ethnicity = rData.ethnicity || '';
+                
+                if (skinTone >= 1 && skinTone <= 5) {
+                    return (skinToneDescriptions[ethnicity] || skinToneDescriptions[''])['1-5'];
+                } else if (skinTone >= 6 && skinTone <= 10) {
+                    return (skinToneDescriptions[ethnicity] || skinToneDescriptions[''])['6-10'];
+                } else if (skinTone >= 11 && skinTone <= 15) {
+                    return (skinToneDescriptions[ethnicity] || skinToneDescriptions[''])['11-15'];
+                } else {
+                    return (skinToneDescriptions[ethnicity] || skinToneDescriptions[''])['16-20'];
+                }
+            };
+
+            return (
+                <div className="grid md:grid-cols-2 gap-8">
+                    <div className="space-y-6">
+                         <div className="flex gap-2 p-1 bg-slate-800 rounded-lg">
+                            <button onClick={()=>setActiveTab('personal')} className={`px-4 py-2 rounded text-sm font-bold flex-1 ${activeTab === 'personal' ? 'bg-indigo-600 text-white' : 'text-slate-400'}`}>Personal</button>
+                            <button onClick={()=>setActiveTab('appearance')} className={`px-4 py-2 rounded text-sm font-bold flex-1 ${activeTab === 'appearance' ? 'bg-emerald-600 text-white' : 'text-slate-400'}`}>Appearance</button>
+                            <button onClick={()=>setActiveTab('football')} className={`px-4 py-2 rounded text-sm font-bold flex-1 ${activeTab === 'football' ? 'bg-rose-600 text-white' : 'text-slate-400'}`}>Football</button>
+                        </div>
+
+                        {activeTab === 'personal' && (
+                        <div className="bg-slate-800 border border-slate-700 rounded-xl p-5 space-y-4">
+                            <div className="grid grid-cols-2 gap-4">
+                                <div><label className="text-xs text-slate-400 block mb-1">First Name</label><input type="text" value={rData.firstName} onChange={e=>updateRData('firstName', e.target.value)} placeholder="First Name" className="bg-slate-900 border border-slate-600 rounded p-2 text-sm text-white"/></div>
+                                <div><label className="text-xs text-slate-400 block mb-1">Last Name</label><input type="text" value={rData.lastName} onChange={e=>updateRData('lastName', e.target.value)} placeholder="Last Name" className="bg-slate-900 border border-slate-600 rounded p-2 text-sm text-white"/></div>
+                            </div>
+                            <div><label className="text-xs text-slate-400 block mb-1">Nickname (Optional)</label><input type="text" value={rData.commonName} onChange={e=>updateRData('commonName', e.target.value)} placeholder="Nickname (Optional)" className="w-full bg-slate-900 border border-slate-600 rounded p-2 text-sm text-white"/></div>
+                            
+                            <div className="grid grid-cols-2 gap-4 items-center">
+                                <input type="date" value={rData.dobInput} disabled={rData.dobRandom} onChange={e=>updateRData('dobInput', e.target.value)} className="bg-slate-900 border border-slate-600 rounded p-2 text-sm text-white"/>
+                                <label className="flex items-center gap-2 text-sm text-slate-400"><input type="checkbox" checked={rData.dobRandom} onChange={e=>updateRData('dobRandom', e.target.checked)}/> Random Date</label>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4">
+                                <div><label className="text-xs text-slate-400 block mb-1">Nationality</label><select value={rData.nation} disabled={rData.nationRandom} onChange={e=>updateRData('nation', e.target.value)} className="bg-slate-900 border border-slate-600 rounded p-2 text-sm text-white">
+                                    {nationsData.map(n => <option key={n.id} value={n.id}>{n.name}</option>)}
+                                </select></div>
+                                <label className="flex items-center gap-2 text-sm text-slate-400"><input type="checkbox" checked={rData.nationRandom} onChange={e=>updateRData('nationRandom', e.target.checked)}/> Random Nation</label>
+                            </div>
+                            <div><label className="text-xs text-slate-400 block mb-1">City of Birth</label><input type="text" value={rData.birthCity} onChange={e=>updateRData('birthCity', e.target.value)} placeholder="City of Birth" className="w-full bg-slate-900 border border-slate-600 rounded p-2 text-sm text-white"/></div>
+                            <IdLookupField 
+                                label="Favourite Club ID"
+                                value={rData.favTeam}
+                                onChange={e=>updateRData('favTeam', e.target.value)}
+                                placeholder="Favourite Club ID"
+                                name="favTeam"
+                            />
+                        </div>
+                        )}
+
+                        {activeTab === 'appearance' && (
+                        <div className="bg-slate-800 border border-slate-700 rounded-xl p-5 space-y-4">
+                            <div className="grid grid-cols-2 gap-4">
+                                <div><label className="text-xs text-slate-400 block mb-1">Ethnicity</label><select value={rData.ethnicity} onChange={e=>updateRData('ethnicity', e.target.value)} className="bg-slate-900 border border-slate-600 rounded p-2 text-sm text-white">
+                                    <option value="">Random</option>
+                                    <option value="0">Northern European and Caucasian</option>
+                                    <option value="1">Mediterranean and Southern European</option>
+                                    <option value="2">North African and Middle Eastern</option>
+                                    <option value="3">African and Sub-Saharan</option>
+                                    <option value="4">South Asian and Indian subcontinent</option>
+                                    <option value="5">Southeast Asian</option>
+                                    <option value="9">Mixed ethnicity</option>
+                                    <option value="10">East Asian</option>
+                                </select></div>
+                                <div><label className="text-xs text-slate-400 block mb-1">Hair Color</label><select value={rData.hairColour} onChange={e=>updateRData('hairColour', e.target.value)} className="bg-slate-900 border border-slate-600 rounded p-2 text-sm text-white">
+                                    <option value="">Random</option>
+                                    <option value="1">Blond</option><option value="2">L.Brown</option><option value="3">D.Brown</option><option value="4">Red</option><option value="5">Black</option><option value="7">Bald</option>
+                                </select></div>
+                            </div>
+                            <div>
+                                <div className="flex justify-between mb-1">
+                                    <label className="text-xs text-slate-400 block">Skin Tone ({rData.skinTone})</label>
+                                    <div className="w-4 h-4 rounded-full border border-slate-500" style={{ backgroundColor: skinColor }}></div>
+                                </div>
+                                <input 
+                                    type="range" 
+                                    min="1" 
+                                    max="20" 
+                                    value={rData.skinTone} 
+                                    onChange={e=>updateRData('skinTone', e.target.value)} 
+                                    disabled={rData.skinToneRandom}
+                                    style={{
+                                        background: `linear-gradient(to right, ${skinColor} 0%, ${skinColor} ${((rData.skinTone - 1) / 19) * 100}%, #475569 ${((rData.skinTone - 1) / 19) * 100}%, #475569 100%)`,
+                                        '--thumb-color': skinColor
+                                    }}
+                                    className="w-full h-2 rounded-lg appearance-none cursor-pointer skin-tone-slider"
+                                />
+                                <div className="flex justify-between items-center mt-1">
+                                    <p className="text-[10px] text-slate-500 italic">{getSkinToneDescription()}</p>
+                                    <label className="flex items-center gap-2 text-xs text-slate-400"><input type="checkbox" checked={rData.skinToneRandom} onChange={e=>updateRData('skinToneRandom', e.target.checked)}/> Random</label>
+                                </div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div><label className="text-xs text-slate-400 block mb-1">Height (cm)</label><input type="number" value={rData.height} onChange={e=>updateRData('height', e.target.value)} placeholder="Height (cm)" className="bg-slate-900 border border-slate-600 rounded p-2 text-sm text-white"/></div>
+                                <div><label className="text-xs text-slate-400 block mb-1">Weight (kg)</label><input type="number" value={rData.weight} onChange={e=>updateRData('weight', e.target.value)} placeholder="Weight (kg)" className="bg-slate-900 border border-slate-600 rounded p-2 text-sm text-white"/></div>
+                            </div>
+                            <div><label className="text-xs text-slate-400 block mb-1">Gender</label><select value={rData.gender} onChange={e=>updateRData('gender', e.target.value)} className="bg-slate-900 border border-slate-600 rounded p-2 text-sm text-white w-full">
+                                <option value="MALE">Male</option><option value="FEMALE">Female</option>
+                            </select></div>
+                            <div>
+                                <label className="text-xs text-slate-400 block mb-1">Haircut (Portrait Only)</label>
+                                <input 
+                                    type="text" 
+                                    value={rData.haircut} 
+                                    onChange={e=>updateRData('haircut', e.target.value)} 
+                                    placeholder="e.g., short buzz cut with fade, long ponytail, curly afro..." 
+                                    className="bg-slate-900 border border-slate-600 rounded p-2 text-sm text-white w-full placeholder:text-slate-500"
+                                />
+                                <p className="text-[10px] text-slate-500 mt-1">Describe the hairstyle you want for the AI-generated portrait</p>
+                            </div>
+                        </div>
+                        )}
+
+                        {activeTab === 'football' && (
+                        <div className="bg-slate-800 border border-slate-700 rounded-xl p-5 space-y-4">
+                             <div><label className="text-xs text-slate-400 block mb-1">Position</label><select value={rData.position} onChange={e=>updateRData('position', e.target.value)} className="w-full bg-slate-900 border border-slate-600 rounded p-2 text-sm text-white">
+                                <option value="">Random</option>
+                                <optgroup label="Goalkeeper"><option value="GOALKEEPER">Goalkeeper (GK)</option></optgroup>
+                                <optgroup label="Defence">
+                                    <option value="DEFENDER_LEFT_SIDE">Left Back (DL)</option>
+                                    <option value="DEFENDER_CENTRAL">Centre Back (DC)</option>
+                                    <option value="DEFENDER_RIGHT_SIDE">Right Back (DR)</option>
+                                </optgroup>
+                                <optgroup label="Midfield">
+                                    <option value="MIDFIELDER_LEFT_SIDE">Left Mid (ML)</option>
+                                    <option value="MIDFIELDER_CENTRAL">Centre Mid (MC)</option>
+                                    <option value="MIDFIELDER_RIGHT_SIDE">Right Mid (MR)</option>
+                                </optgroup>
+                                <optgroup label="Attacking Mid">
+                                    <option value="ATTACKING_MIDFIELDER_LEFT_SIDE">Left Winger (AML)</option>
+                                    <option value="ATTACKING_MIDFIELDER_CENTRAL">Attacking Mid (AMC)</option>
+                                    <option value="ATTACKING_MIDFIELDER_RIGHT_SIDE">Right Winger (AMR)</option>
+                                </optgroup>
+                                <optgroup label="Attack"><option value="ATTACKER_CENTRAL">Striker (ST)</option></optgroup>
+                             </select></div>
+                             
+                             <div><label className="text-xs text-slate-400 block mb-1">Preferred Foot</label><select value={rData.foot} onChange={e=>updateRData('foot', e.target.value)} className="bg-slate-900 border border-slate-600 rounded p-2 text-sm text-white w-full">
+                                <option value="">Random</option>
+                                <option value="0">Right Only</option>
+                                <option value="1">Left Only</option>
+                                <option value="3">Right (Left Weak)</option>
+                                <option value="2">Left (Right Weak)</option>
+                                <option value="4">Both</option>
+                            </select></div>
+
+                             <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="text-xs text-slate-400">Current Ability (CA)</label>
+                                    <input type="number" value={rData.ca} onChange={e=>updateRData('ca', e.target.value)} className="w-full bg-slate-900 border border-slate-600 rounded p-2 text-sm text-white" placeholder="1-200"/>
+                                </div>
+                                <div>
+                                    <div className="flex justify-between items-center mb-1">
+                                        <label className="text-xs text-slate-400">Potential (PA)</label>
+                                        <button onClick={()=>updateRData('paMode', rData.paMode==='dynamic'?'custom':'dynamic')} className="text-[10px] bg-slate-700 px-2 rounded text-white">{rData.paMode === 'dynamic' ? 'dynamic' : 'custom'}</button>
+                                    </div>
+                                    {rData.paMode === 'dynamic' ? (
+                                        <select value={rData.pa_dynamic} onChange={e=>updateRData('pa_dynamic', e.target.value)} className="w-full bg-slate-900 border border-slate-600 rounded p-2 text-sm text-white">
+                                            <option value="-10">170-200 (World Class)</option>
+                                            <option value="-95">160-190</option>
+                                            <option value="-9">150-180</option>
+                                            <option value="-85">140-170</option>
+                                            <option value="-8">130-160</option>
+                                        </select>
+                                    ) : (
+                                        <input type="number" value={rData.pa_custom} onChange={e=>updateRData('pa_custom', e.target.value)} className="w-full bg-slate-900 border border-slate-600 rounded p-2 text-sm text-white" placeholder="1-200"/>
+                                    )}
+                                </div>
+                             </div>
+                             <IdLookupField 
+                                label="Target Club ID (Spawn)"
+                                value={rData.clubId}
+                                onChange={e=>updateRData('clubId', e.target.value)}
+                                placeholder="Target Club ID (Spawn)"
+                                name="clubId"
+                            />
+                        </div>
+                        )}
+                    </div>
+
+                    <div className="space-y-6">
+                        {/* AI Face Gen */}
+                        <div className="bg-slate-800 border border-slate-700 rounded-xl p-5">
+                             <h3 className="text-pink-400 text-xs font-bold uppercase mb-4 text-center">AI Face Generator</h3>
+                             
+                             {!pollinationsKey ? (
+                                <div className="bg-blue-600/10 border border-blue-600/30 rounded-xl p-4 space-y-3 mb-4">
+                                    <p className="text-sm text-blue-400">
+                                        <Icon name="lock" className="mr-2" />
+                                        Connect your Pollinations account to generate AI faces
+                                    </p>
+                                    <button 
+                                        onClick={() => {
+                                            const currentUrl = window.location.href.split('#')[0];
+                                            window.location.href = `https://enter.pollinations.ai/authorize?redirect_url=${encodeURIComponent(currentUrl)}`;
+                                        }}
+                                        className="w-full bg-blue-600 hover:bg-blue-500 text-white py-2 rounded text-sm font-bold flex justify-center items-center gap-2"
+                                    >
+                                        <Icon name="key" /> Connect Account
+                                    </button>
+                                </div>
+                            ) : (
+                                <div className="bg-green-600/10 border border-green-600/30 rounded-xl p-3 mb-4">
+                                    <p className="text-xs text-green-400 flex items-center gap-2">
+                                        <Icon name="check-circle" /> Connected to Pollinations
+                                    </p>
+                                </div>
+                            )}
+                             
+                             {(faceCloudflareUrl || faceUrl) ? <img src={faceCloudflareUrl || faceUrl} className="w-64 h-64 rounded-lg mx-auto mb-4 object-cover border border-slate-600" /> : <div className="w-64 h-64 bg-black/30 rounded-lg mx-auto mb-4 flex items-center justify-center text-slate-600"><Icon name="camera" size={48}/></div>}
+                             
+                             <div className="mb-3">
+                                 <label className="text-xs text-slate-400 block mb-2 text-left">AI Model</label>
+                                 <select value={rData.aiModel} onChange={e=>updateRData('aiModel', e.target.value)} disabled={!pollinationsKey} className="w-full bg-slate-900 border border-slate-600 rounded p-2 text-sm text-white disabled:opacity-50 disabled:cursor-not-allowed">
+                                     <option value="flux">Flux Schnell (5k images/💎) - Best</option>
+                                     <option value="zimage">Z-Image Turbo (5k images/💎)</option>
+                                     <option value="gptimage-large">GPT Image 1.5 (40 images/💎)</option>
+                                     <option value="seedream-pro">Seedream 4.5 Pro (25 images/💎)</option>
+                                     <option value="nanobanana-pro">NanoBanana Pro (10 images/💎)</option>
+                                 </select>
+                                 <p className="text-[10px] text-slate-500 mt-1">💎 (Pollen) is Pollinations' credit system. Free account includes credits.</p>
+                             </div>
+                             
+                             <button onClick={generateFace} disabled={faceLoading || !pollinationsKey} className="w-full bg-pink-600 hover:bg-pink-500 text-white py-2 rounded text-sm font-bold flex justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
+                                {faceLoading ? 'Generating...' : 'Generate Face'}
+                             </button>
+                             {(faceCloudflareUrl || faceUrl) && <button onClick={downloadFace} className="block w-full mt-2 text-xs text-blue-400 hover:underline text-center cursor-pointer bg-transparent border-none">Download Image</button>}
+                        </div>
+
+                        <div className="bg-slate-800 border border-slate-700 rounded-xl p-5">
+                            <h3 className="text-emerald-400 text-xs font-bold uppercase mb-2">Preview Code</h3>
+                            <div className="bg-black/50 p-4 rounded text-xs font-mono text-emerald-200 break-all border border-slate-700">{getRegenCommand()}</div>
+                        </div>
+                        
+                        <div className="space-y-2">
+                            <button onClick={downloadRegenZip} disabled={zipLoading} className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-4 rounded-xl shadow-lg flex items-center justify-center gap-2 disabled:opacity-50">
+                                {zipLoading ? 'Generating...' : <><Icon name="download" /> Download Full ZIP</> }
+                            </button>
+                            
+                            <button onClick={downloadRegen} className="w-full text-slate-400 hover:text-white hover:bg-slate-700 py-2 px-4 rounded-xl border border-slate-600 text-sm font-medium flex items-center justify-center gap-2">
+                                <Icon name="file" /> .EDT Only
+                            </button>
+                            
+                            <button onClick={saveSettings} className="w-full bg-blue-600 hover:bg-blue-500 text-white font-semibold py-2 rounded-xl flex items-center justify-center gap-2">
+                                <Icon name="floppy-disk" /> Save Settings as Default
+                            </button>
+                            
+                            {saveNotification && (
+                                <div className="bg-green-600/20 text-green-400 border border-green-600/30 px-3 py-2 rounded-lg text-center text-xs font-semibold animate-pulse">
+                                    ✓ Settings saved successfully!
+                                </div>
+                            )}
+                        </div>
+                         
+                        {/* Instructions */}
+                        <div className="mt-6 p-4 bg-slate-950 rounded-xl border border-slate-600">
+                            <h4 className="text-sm font-bold text-emerald-400 mb-2">📖 How to Use</h4>
+                            <ul className="text-xs text-slate-400 space-y-1 list-disc list-inside">
+                                <li>Fill in player details and customize appearance above</li>
+                                <li>Click "Copy Code" or "Download File" to get your .edt file</li>
+                                <li>Place in: <code className="bg-slate-900 px-2 py-0.5 rounded">C:\XboxGames\Football Manager 26 Console\Content\shared\data\database\db\2600\edt\permanent</code></li>
+                                <li>Ensure the file extension is <strong>.edt</strong></li>
+                                <li>Start a new career - your custom player will appear at Youth Intake</li>
+                                </ul>
+                                </div>
+                        {/* Instructions image */}
+                        <div className="mt-6 p-4 bg-slate-950 rounded-xl border border-slate-600">
+                            <h4 className="text-sm font-bold text-emerald-400 mb-2">📖 How to Use</h4>
+                            <ul className="text-xs text-slate-400 space-y-1 list-disc list-inside">
+                                <li>To use the AI-generated face, click "Download image".</li>
+                                <li>Place the graphics folder in: <code className="bg-slate-900 px-2 py-0.5 rounded">\Documents\Sports Interactive\Football Manager 26 Console\</code></li>
+                                <li>To add the AI-generated face, rename the image to your player's Unique ID (e.g., <code className="bg-slate-900 px-2 py-0.5 rounded">123456789.png</code>)</li>
+                                <li>For the image, the custom player first needs to appear in the game before knowing what the Unique ID is</li>
+                                <li>Also edit the .xml file with a text editor and add the players Unique ID.</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // ==========================================
+        // COMPONENT: RETAIN PLAYERS CREATOR
+        // ==========================================
+        const RetainPlayersCreator = () => {
+            const [loading, setLoading] = useState(false);
+            const [resultMessage, setResultMessage] = useState('');
+            
+            // Filter settings
+            const [filters, setFilters] = useState({
+                nations: [],
+                continents: [],
+                minRep: '',
+                maxRep: '',
+                status: '',
+                minBalance: '',
+                maxBalance: '',
+                minTF: '',
+                maxTF: '',
+                minYF: '',
+                maxYF: ''
+            });
+
+            const continentsData = [
+                { id: 'europe', name: 'Europe' },
+                { id: 'south_america', name: 'South America' },
+                { id: 'north_america', name: 'North America' },
+                { id: 'africa', name: 'Africa' },
+                { id: 'asia', name: 'Asia' },
+                { id: 'oceania', name: 'Oceania' }
+            ];
+
+            const continentMapping = {
+                europe: ['Albania', 'Andorra', 'Armenia', 'Austria', 'Azerbaijan', 'Belarus', 'Belgium', 'Bosnia and Herzegovina', 'Bulgaria', 'Croatia', 'Cyprus', 'Czechia', 'Denmark', 'England', 'Estonia', 'Faroe Islands', 'Finland', 'France', 'Georgia', 'Germany', 'Gibraltar', 'Greece', 'Hungary', 'Iceland', 'Israel', 'Italy', 'Kazakhstan', 'Kosovo', 'Latvia', 'Lithuania', 'Luxembourg', 'Malta', 'Moldova', 'Montenegro', 'Netherlands', 'North Macedonia', 'Northern Ireland', 'Norway', 'Poland', 'Portugal', 'Republic of Ireland', 'Romania', 'Russia', 'San Marino', 'Scotland', 'Serbia', 'Slovakia', 'Slovenia', 'Spain', 'Sweden', 'Switzerland', 'Türkiye', 'Ukraine', 'Wales'],
+                south_america: ['Argentina', 'Bolivia', 'Brazil', 'Chile', 'Colombia', 'Ecuador', 'French Guiana', 'Guyana', 'Paraguay', 'Peru', 'Suriname', 'Uruguay', 'Venezuela'],
+                north_america: ['Anguilla', 'Antigua and Barbuda', 'Aruba', 'Barbados', 'Belize', 'Bermuda', 'British Virgin Islands', 'Canada', 'Cayman Islands', 'Costa Rica', 'Cuba', 'Curaçao', 'Dominica', 'Dominican Republic', 'El Salvador', 'Grenada', 'Guadeloupe', 'Guatemala', 'Haiti', 'Honduras', 'Jamaica', 'Martinique', 'Mexico', 'Montserrat', 'Nicaragua', 'Panama', 'Puerto Rico', 'Saint Kitts and Nevis', 'Saint Lucia', 'Saint Martin', 'Saint Vincent and the Grenadines', 'Sint Maarten', 'The Bahamas', 'Trinidad and Tobago', 'Turks and Caicos Islands', 'United States', 'US Virgin Islands'],
+                africa: ['Algeria', 'Angola', 'Benin', 'Botswana', 'Burkina Faso', 'Burundi', 'Cameroon', 'Cape Verde Islands', 'Central African Republic', 'Chad', 'Comoros', 'Congo', 'Democratic Republic of Congo', 'Djibouti', 'Egypt', 'Equatorial Guinea', 'Eritrea', 'Eswatini', 'Ethiopia', 'Gabon', 'Ghana', 'Guinea', 'Guinea-Bissau', 'Ivory Coast', 'Kenya', 'Lesotho', 'Liberia', 'Libya', 'Madagascar', 'Malawi', 'Mali', 'Mauritania', 'Mauritius', 'Mayotte', 'Morocco', 'Mozambique', 'Namibia', 'Niger', 'Nigeria', 'Rwanda', 'Réunion', 'São Tomé and Príncipe', 'Senegal', 'Seychelles', 'Sierra Leone', 'Somalia', 'South Africa', 'South Sudan', 'Sudan', 'Tanzania', 'The Gambia', 'Togo', 'Tunisia', 'Uganda', 'Zambia', 'Zanzibar', 'Zimbabwe'],
+                asia: ['Afghanistan', 'Bahrain', 'Bangladesh', 'Bhutan', 'Brunei Darussalam', 'Cambodia', 'China PR', 'Chinese Taipei (China PR)', 'East Timor', 'Guam', 'Hong Kong (China PR)', 'India', 'Indonesia', 'Iran', 'Iraq', 'Japan', 'Jordan', 'Kuwait', 'Kyrgyzstan', 'Laos', 'Lebanon', 'Macau (China PR)', 'Malaysia', 'Maldives', 'Mongolia', 'Myanmar', 'Nepal', 'North Korea', 'Northern Mariana Islands', 'Oman', 'Pakistan', 'Palestine', 'Philippines', 'Qatar', 'Saudi Arabia', 'Singapore', 'South Korea', 'Sri Lanka', 'Syria', 'Tajikistan', 'Thailand', 'Turkmenistan', 'United Arab Emirates', 'Uzbekistan', 'Vietnam', 'Yemen'],
+                oceania: ['American Samoa', 'Australia', 'Cook Islands', 'Fiji', 'Kiribati', 'Micronesia', 'New Caledonia', 'New Zealand', 'Papua New Guinea', 'Samoa', 'Solomon Islands', 'Tahiti', 'Tonga', 'Tuvalu', 'Vanuatu']
+            };
+
+            const statusOptions = [
+                { value: '', label: 'All' },
+                { value: 'Professional', label: 'Professional' },
+                { value: 'Semi-Professional', label: 'Semi-Professional' },
+                { value: 'Amateur', label: 'Amateur' }
+            ];
+
+            const handleFilterChange = (key, value) => {
+                setFilters(prev => ({ ...prev, [key]: value }));
+            };
+
+            const handleNationToggle = (nation) => {
+                setFilters(prev => ({
+                    ...prev,
+                    nations: prev.nations.includes(nation)
+                        ? prev.nations.filter(n => n !== nation)
+                        : [...prev.nations, nation]
+                }));
+            };
+
+            const handleContinentClick = (continent) => {
+                // Get all nations from this continent
+                const continentNations = continentMapping[continent] || [];
+                
+                // Set nations filter to all nations from this continent
+                setFilters(prev => ({
+                    ...prev,
+                    continents: [continent],
+                    nations: continentNations
+                }));
+            };
+
+            const handleShowAllNations = () => {
+                // Reset to show all nations
+                setFilters(prev => ({
+                    ...prev,
+                    continents: [],
+                    nations: []
+                }));
+            };
+
+            const createFile = async (downloadFile = true) => {
+                setLoading(true);
+                setResultMessage('');
+                
+                try {
+                    // Build Supabase query with AND filters
+                    let query = `${SUPABASE_URL}/rest/v1/clubs?select=Unique ID`;
+                    
+                    // Combine nations from both continents and specific nations (AND logic)
+                    let nationsToFilter = [...filters.nations];
+                    if (filters.continents.length > 0) {
+                        const continentNations = filters.continents.flatMap(cont => continentMapping[cont] || []);
+                        if (nationsToFilter.length > 0) {
+                            // AND logic: intersection of continent nations and selected nations
+                            nationsToFilter = nationsToFilter.filter(n => continentNations.includes(n));
+                        } else {
+                            nationsToFilter = continentNations;
+                        }
+                    }
+                    
+                    // Apply nation filter
+                    if (nationsToFilter.length > 0) {
+                        query += `&Nation=in.(${nationsToFilter.map(n => encodeURIComponent(n)).join(',')})`;
+                    }
+                    
+                    // Apply reputation filters (AND logic)
+                    if (filters.minRep !== '') {
+                        query += `&Rep=gte.${filters.minRep}`;
+                    }
+                    if (filters.maxRep !== '') {
+                        query += `&Rep=lte.${filters.maxRep}`;
+                    }
+                    
+                    // Apply status filter
+                    if (filters.status !== '') {
+                        query += `&Status=eq.${encodeURIComponent(filters.status)}`;
+                    }
+                    
+                    // Apply balance filters
+                    if (filters.minBalance !== '') {
+                        query += `&Balance=gte.${filters.minBalance}`;
+                    }
+                    if (filters.maxBalance !== '') {
+                        query += `&Balance=lte.${filters.maxBalance}`;
+                    }
+                    
+                    // Apply training facility filters
+                    if (filters.minTF !== '') {
+                        query += `&TF=gte.${filters.minTF}`;
+                    }
+                    if (filters.maxTF !== '') {
+                        query += `&TF=lte.${filters.maxTF}`;
+                    }
+                    
+                    // Apply youth facility filters
+                    if (filters.minYF !== '') {
+                        query += `&YF=gte.${filters.minYF}`;
+                    }
+                    if (filters.maxYF !== '') {
+                        query += `&YF=lte.${filters.maxYF}`;
+                    }
+                    
+                    const response = await fetch(query, {
+                        headers: {
+                            'apikey': SUPABASE_KEY,
+                            'Authorization': `Bearer ${SUPABASE_KEY}`
+                        }
+                    });
+                    
+                    if (!response.ok) throw new Error('Failed to load clubs');
+                    const clubs = await response.json();
+                    
+                    if (clubs.length === 0) {
+                        setResultMessage('⚠️ No clubs found matching your filters');
+                        return;
+                    }
+                    
+                    // Generate .ddt content
+                    const lines = clubs.map(club => `"RETAIN_PLAYERS" "${club['Unique ID']}"`);
+                    const content = lines.join('\n');
+                    
+                    if (downloadFile) {
+                        // Download file
+                        const blob = new Blob([content], { type: 'text/plain' });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = 'retain_players.ddt';
+                        a.click();
+                        URL.revokeObjectURL(url);
+                        setResultMessage(`✅ File created successfully with ${clubs.length} clubs!`);
+                    } else {
+                        // Copy to clipboard
+                        await navigator.clipboard.writeText(content);
+                        setResultMessage(`✅ Copied ${clubs.length} clubs to clipboard!`);
+                    }
+                } catch (error) {
+                    setResultMessage(`❌ Error: ${error.message}`);
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            return (
+                <div className="space-y-6">
+                    {/* Filters Card */}
+                    <div className="bg-slate-800 border border-slate-700 rounded-xl p-5 space-y-4">
+                        <h3 className="text-xl font-bold text-white mb-4">🎯 Filter Clubs</h3>
+                        
+                        <div className="space-y-6">
+                            {/* Continents */}
+                            <div>
+                                <label className="text-xs text-slate-400 block mb-3 font-medium">Select Continent</label>
+                                <div className="flex flex-wrap gap-2">
+                                    {continentsData.map(continent => (
+                                        <button
+                                            key={continent.id}
+                                            onClick={() => handleContinentClick(continent.id)}
+                                            className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
+                                                filters.continents.includes(continent.id)
+                                                    ? 'bg-purple-600 text-white shadow-lg shadow-purple-500/30'
+                                                    : 'bg-slate-900 text-slate-400 hover:bg-slate-700 hover:text-white border border-slate-600'
+                                            }`}
+                                        >
+                                            {continent.name}
+                                        </button>
+                                    ))}
+                                    {filters.continents.length > 0 && (
+                                        <button
+                                            onClick={handleShowAllNations}
+                                            className="px-4 py-2 rounded-lg text-sm font-semibold bg-red-600/20 text-red-400 border border-red-600/30 hover:bg-red-600/30 transition-all"
+                                        >
+                                            ✕ Show All Nations
+                                        </button>
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* Nations */}
+                            <div>
+                                <div className="flex items-center justify-between mb-3">
+                                    <label className="text-xs text-slate-400 font-medium">
+                                        Select Nations {filters.continents.length > 0 && `(${continentsData.find(c => c.id === filters.continents[0])?.name})`}
+                                    </label>
+                                    <span className="text-xs text-slate-500">
+                                        {filters.nations.length} selected
+                                    </span>
+                                </div>
+                                <div className="max-h-40 overflow-y-auto bg-slate-950 rounded-lg p-3 space-y-2 border border-slate-600">
+                                    {(filters.continents.length > 0 
+                                        ? nationsData.filter(nation => filters.nations.includes(nation.name))
+                                        : nationsData
+                                    ).map(nation => (
+                                        <label key={nation.id} className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer hover:text-white">
+                                            <input 
+                                                type="checkbox"
+                                                checked={filters.nations.includes(nation.name)}
+                                                onChange={() => handleNationToggle(nation.name)}
+                                                className="rounded"
+                                            />
+                                            {nation.name}
+                                        </label>
+                                    ))}
+                                    {filters.continents.length > 0 && filters.nations.length === 0 && (
+                                        <p className="text-center text-slate-500 py-2 text-sm">No nations selected</p>
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* Reputation Range */}
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="text-xs text-slate-400 block mb-1">Min Reputation</label>
+                                    <input
+                                        type="number"
+                                        placeholder="e.g., 5000"
+                                        value={filters.minRep}
+                                        onChange={(e) => handleFilterChange('minRep', e.target.value)}
+                                        className="w-full bg-slate-900 border border-slate-600 rounded p-2 text-sm text-white"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="text-xs text-slate-400 block mb-1">Max Reputation</label>
+                                    <input
+                                        type="number"
+                                        placeholder="e.g., 10000"
+                                        value={filters.maxRep}
+                                        onChange={(e) => handleFilterChange('maxRep', e.target.value)}
+                                        className="w-full bg-slate-900 border border-slate-600 rounded p-2 text-sm text-white"
+                                    />
+                                </div>
+                            </div>
+
+                            {/* Status */}
+                            <div>
+                                <label className="text-xs text-slate-400 block mb-1">Club Status</label>
+                                <select
+                                    value={filters.status}
+                                    onChange={(e) => handleFilterChange('status', e.target.value)}
+                                    className="w-full bg-slate-900 border border-slate-600 rounded p-2 text-sm text-white"
+                                >
+                                    {statusOptions.map(opt => (
+                                        <option key={opt.value} value={opt.value}>{opt.label}</option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            {/* Balance Range */}
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="text-xs text-slate-400 block mb-1">Min Balance</label>
+                                    <input
+                                        type="number"
+                                        placeholder="e.g., 1000000"
+                                        value={filters.minBalance}
+                                        onChange={(e) => handleFilterChange('minBalance', e.target.value)}
+                                        className="w-full bg-slate-900 border border-slate-600 rounded p-2 text-sm text-white"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="text-xs text-slate-400 block mb-1">Max Balance</label>
+                                    <input
+                                        type="number"
+                                        placeholder="e.g., 50000000"
+                                        value={filters.maxBalance}
+                                        onChange={(e) => handleFilterChange('maxBalance', e.target.value)}
+                                        className="w-full bg-slate-900 border border-slate-600 rounded p-2 text-sm text-white"
+                                    />
+                                </div>
+                            </div>
+
+                            {/* Training Facility Range */}
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="text-xs text-slate-400 block mb-1">Min Training Facility (1-20)</label>
+                                    <input
+                                        type="number"
+                                        min="1"
+                                        max="20"
+                                        placeholder="e.g., 10"
+                                        value={filters.minTF}
+                                        onChange={(e) => handleFilterChange('minTF', e.target.value)}
+                                        className="w-full bg-slate-900 border border-slate-600 rounded p-2 text-sm text-white"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="text-xs text-slate-400 block mb-1">Max Training Facility (1-20)</label>
+                                    <input
+                                        type="number"
+                                        min="1"
+                                        max="20"
+                                        placeholder="e.g., 20"
+                                        value={filters.maxTF}
+                                        onChange={(e) => handleFilterChange('maxTF', e.target.value)}
+                                        className="w-full bg-slate-900 border border-slate-600 rounded p-2 text-sm text-white"
+                                    />
+                                </div>
+                            </div>
+
+                            {/* Youth Facility Range */}
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="text-xs text-slate-400 block mb-1">Min Youth Facility (1-20)</label>
+                                    <input
+                                        type="number"
+                                        min="1"
+                                        max="20"
+                                        placeholder="e.g., 10"
+                                        value={filters.minYF}
+                                        onChange={(e) => handleFilterChange('minYF', e.target.value)}
+                                        className="w-full bg-slate-900 border border-slate-600 rounded p-2 text-sm text-white"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="text-xs text-slate-400 block mb-1">Max Youth Facility (1-20)</label>
+                                    <input
+                                        type="number"
+                                        min="1"
+                                        max="20"
+                                        placeholder="e.g., 20"
+                                        value={filters.maxYF}
+                                        onChange={(e) => handleFilterChange('maxYF', e.target.value)}
+                                        className="w-full bg-slate-900 border border-slate-600 rounded p-2 text-sm text-white"
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Create File Button & Status */}
+                    <div className="bg-slate-800 border border-slate-700 rounded-xl p-5 space-y-4">
+                        <h3 className="text-xl font-bold text-white mb-4">💾 Generate File</h3>
+                        
+                        <div className="space-y-4">
+                            <div className="flex gap-3">
+                                <button
+                                    onClick={() => createFile(true)}
+                                    disabled={loading}
+                                    className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 px-6 rounded-xl shadow-lg flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    {loading ? 'Generating...' : '📥 Create & Download .ddt File'}
+                                </button>
+                                <button
+                                    onClick={() => createFile(false)}
+                                    disabled={loading}
+                                    className="flex-1 text-slate-400 hover:text-white hover:bg-slate-700 py-2 px-4 rounded-xl border border-slate-600 text-sm font-medium flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    {loading ? 'Generating...' : '📋 Create & Copy to Clipboard'}
+                                </button>
+                            </div>
+                            
+                            {resultMessage && (
+                                <div className={`p-4 rounded-xl text-center font-semibold ${
+                                    resultMessage.includes('✅') ? 'bg-green-600/20 text-green-400 border border-green-600/30' :
+                                    resultMessage.includes('⚠️') ? 'bg-yellow-600/20 text-yellow-400 border border-yellow-600/30' :
+                                    'bg-red-600/20 text-red-400 border border-red-600/30'
+                                }`}>
+                                    {resultMessage}
+                                </div>
+                            )}
+                        </div>
+                        
+                        {/* Instructions */}
+                        <div className="mt-6 p-4 bg-slate-950 rounded-xl border border-slate-600">
+                            <h4 className="text-sm font-bold text-purple-400 mb-2">📖 How to Use</h4>
+                            <ul className="text-xs text-slate-400 space-y-1 list-disc list-inside">
+                                <li>Set your filters above (all filters use AND logic)</li>
+                                <li>Click "Create & Download" to generate the .ddt file</li>
+                                <li>Place in: <code className="bg-slate-900 px-2 py-0.5 rounded">C:\XboxGames\Football Manager 26 Console\Content\shared\data\database\db\2600\</code></li>
+                                <li>Ensure the file extension is <strong>.ddt</strong></li>
+                                <li>Start a new career - the selected clubs will retain their players even if their competitions are not loaded</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // ==========================================
+        // COMPONENT: LANDING PAGE
+        // ==========================================
+        const LandingPage = ({ onNavigate }) => {
+            return (
+                <div className="min-h-full flex items-center justify-center py-12">
+                    <div className="max-w-5xl mx-auto px-6">
+                        {/* Hero Section */}
+                        <div className="text-center mb-16">
+                            <div className="inline-flex items-center gap-3 mb-6">
+                                <h1 className="text-6xl font-black tracking-tight">
+                                    <span className="text-white">FM26</span>{' '}
+                                    <span className="bg-gradient-to-r from-blue-500 via-cyan-500 to-emerald-500 bg-clip-text text-transparent">CREATOR</span>
+                                </h1>
+                                <span className="px-3 py-1 bg-blue-600 text-white text-xs font-bold rounded-full">v{VERSION}</span>
+                            </div>
+                            <p className="text-xl text-zinc-400 max-w-2xl mx-auto mb-4">
+                                Create custom clubs, design future stars, and make changes to your Football Manager 26 database.
+                            </p>
+                            <p className="text-sm text-zinc-500 font-mono uppercase tracking-wider">
+                                Console Edition • Free & No Ads
+                            </p>
+                        </div>
+
+                        {/* Feature Cards */}
+                        <div className="grid md:grid-cols-3 gap-6 mb-12">
+                            {/* Club Creator Card */}
+                            <button
+                                onClick={() => onNavigate('club')}
+                                className="group bg-slate-800/50 border border-slate-700 hover:border-blue-500 rounded-2xl p-8 text-left transition-all hover:shadow-2xl hover:shadow-blue-500/20 hover:-translate-y-1"
+                            >
+                                <div className="w-16 h-16 bg-gradient-to-br from-blue-600 to-blue-500 rounded-xl flex items-center justify-center text-3xl mb-4 group-hover:scale-110 transition-transform">
+                                    🛡️
+                                </div>
+                                <h3 className="text-2xl font-bold text-white mb-2">Club Creator</h3>
+                                <p className="text-sm text-zinc-400 mb-4">
+                                    Design your dream football club with AI-powered logo generation, custom finances, and stadium details
+                                </p>
+                                <div className="flex items-center gap-2 text-blue-400 text-sm font-semibold">
+                                    Get Started
+                                    <svg className="w-4 h-4 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                    </svg>
+                                </div>
+                            </button>
+
+                            {/* Regen Creator Card */}
+                            <button
+                                onClick={() => onNavigate('regen')}
+                                className="group bg-slate-800/50 border border-slate-700 hover:border-emerald-500 rounded-2xl p-8 text-left transition-all hover:shadow-2xl hover:shadow-emerald-500/20 hover:-translate-y-1"
+                            >
+                                <div className="w-16 h-16 bg-gradient-to-br from-emerald-600 to-green-500 rounded-xl flex items-center justify-center text-3xl mb-4 group-hover:scale-110 transition-transform">
+                                    👤
+                                </div>
+                                <h3 className="text-2xl font-bold text-white mb-2">Regen/Newgen</h3>
+                                <p className="text-sm text-zinc-400 mb-4">
+                                    Create custom Regen/Newgen players with AI-generated faces and personalized attributes.
+                                </p>
+                                <div className="flex items-center gap-2 text-emerald-400 text-sm font-semibold">
+                                    Get Started
+                                    <svg className="w-4 h-4 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                    </svg>
+                                </div>
+                            </button>
+
+                            {/* Retain Players Card */}
+                            <button
+                                onClick={() => onNavigate('retain')}
+                                className="group bg-slate-800/50 border border-slate-700 hover:border-purple-500 rounded-2xl p-8 text-left transition-all hover:shadow-2xl hover:shadow-purple-500/20 hover:-translate-y-1"
+                            >
+                                <div className="w-16 h-16 bg-gradient-to-br from-purple-600 to-pink-500 rounded-xl flex items-center justify-center text-3xl mb-4 group-hover:scale-110 transition-transform">
+                                    🔒
+                                </div>
+                                <h3 className="text-2xl font-bold text-white mb-2">Retain Players</h3>
+                                <p className="text-sm text-zinc-400 mb-4">
+                                    Manage your database with advanced filtering to retain players across nations, continents, and other criteria.
+                                </p>
+                                <div className="flex items-center gap-2 text-purple-400 text-sm font-semibold">
+                                    Get Started
+                                    <svg className="w-4 h-4 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                    </svg>
+                                </div>
+                            </button>
+                        </div>
+
+
+                        {/* Quick Links */}
+                        <div className="flex flex-wrap items-center justify-center gap-4 text-sm">
+                            <a href="https://https://pollinations.ai/" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-600 rounded-lg text-zinc-300 hover:text-white transition-colors">
+                                <img src="https://imagedelivery.net/d7SF1fvVgduvpU3kpUjBpw/865eb14b-aff8-48ff-eeb6-5c6f73c39e00/public" alt="Pollinations" className="w-4 h-4 rounded" />
+                                Pollinations AI
+                            </a>
+                            <a href="https://fmkitcreator.com/" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-600 rounded-lg text-zinc-300 hover:text-white transition-colors">
+                                <img src="https://fmkitcreator.com/kit-creator/favicon_fm.png" alt="Kit Creator" className="w-4 h-4 rounded" />
+                                Kit Creator
+                            </a>
+                            <a href="https://www.fmrte.com/files/category/52-football-manager-26/" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-600 rounded-lg text-zinc-300 hover:text-white transition-colors">
+                                <img src="https://www.fmrte.com/uploads/monthly_2025_10/fmrte-26_Base_Image_128.thumb.png.861c27d683f39c278d5bd281b1e5c3fb.png" alt="FMRTE 26" className="w-4 h-4 rounded" />
+                                FMRTE 26
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // ==========================================
+        // COMPONENT: PRIVACY MODAL
+        // ==========================================
+        const PrivacyModal = ({ isOpen, onClose }) => {
+            if (!isOpen) return null;
+
+            return (
+                <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={onClose}>
+                    <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-8 max-w-2xl w-full max-h-[80vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+                        <div className="flex items-center justify-between mb-6">
+                            <h2 className="text-2xl font-bold text-white">Privacy Notice</h2>
+                            <button onClick={onClose} className="text-zinc-400 hover:text-white transition-colors">
+                                <Icon name="xmark" size={24} />
+                            </button>
+                        </div>
+                        
+                        <div className="space-y-6 text-zinc-300">
+                            <div>
+                                <h3 className="text-lg font-semibold text-white mb-2 flex items-center gap-2">
+                                    <Icon name="eye-slash" className="text-green-400" /> No Tracking
+                                </h3>
+                                <p className="text-sm">
+                                    This website does not use tracking cookies or analytics services. Your visit is private.
+                                </p>
+                            </div>
+
+                            <div>
+                                <h3 className="text-lg font-semibold text-white mb-2 flex items-center gap-2">
+                                    <Icon name="hard-drive" className="text-blue-400" /> Local Storage
+                                </h3>
+                                <p className="text-sm">
+                                    We use your browser's <code>localStorage</code> to remember your settings. This data stays on your device and is never sent to us.
+                                </p>
+                                <table style="width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 0.9rem;">
+                                    <thead>
+                                        <tr style="border-bottom: 2px solid #eee; text-align: left;">
+                                            <th style="padding: 8px;">Item</th>
+                                            <th style="padding: 8px;">Purpose</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr style="border-bottom: 1px solid #eee;">
+                                            <td style="padding: 8px;"><code>pollinations_token</code></td>
+                                            <td style="padding: 8px;">Remembers your API connection (OAuth).</td>
+                                        </tr>
+                                        <tr style="border-bottom: 1px solid #eee;">
+                                            <td style="padding: 8px;"><code>app_settings</code></td>
+                                            <td style="padding: 8px;">Saves your tool configurations.</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            <div>
+                                <h3 className="text-lg font-semibold text-white mb-2 flex items-center gap-2">
+                                    <Icon name="plug" className="text-purple-400" /> Third-Party Services
+                                </h3>
+                                <ul className="text-sm space-y-3 ml-6">
+                                    <li>
+                                        <strong className="text-white">Pollinations AI:</strong> If you choose to connect your account via OAuth, Pollinations AI will handle your login. We do not store your credentials.
+                                    </li>
+                                    <li>
+                                        <strong className="text-white">Cloudflare:</strong> We use Cloudflare to host this site and ensure security. Cloudflare may process basic network data (like IP addresses) to protect against attacks, as part of our legitimate interest in maintaining a secure site.
+                                    </li>
+                                </ul>
+                            </div>
+
+                            <div>
+                                <h3 className="text-lg font-semibold text-white mb-2 flex items-center gap-2">
+                                    <Icon name="shield-halved" className="text-cyan-400" /> Your Rights
+                                </h3>
+                                <p className="text-sm">
+                                    Since we do not collect personal data, we have no data to delete or export. For questions, contact: <a href="mailto:contact@sanne.gay" className="text-cyan-400 hover:text-cyan-300 underline">contact@sanne.gay</a>
+                                </p>
+                            </div>
+                        </div>
+
+                        <div className="mt-6 pt-6 border-t border-zinc-800">
+                            <button 
+                                onClick={onClose}
+                                className="w-full bg-zinc-800 hover:bg-zinc-700 text-white py-3 rounded-xl font-semibold transition-colors"
+                            >
+                                Close
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // ==========================================
+        // COMPONENT: HELP MODAL
+        // ==========================================
+        const HelpModal = ({ isOpen, onClose }) => {
+            if (!isOpen) return null;
+
+            return (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80" onClick={onClose}>
+                    <div className="bg-slate-900 border border-slate-700 rounded-xl p-6 max-w-md mx-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center justify-between mb-4">
+                            <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                                <span className="text-2xl">💎</span>
+                                Pollinations AI
+                            </h3>
+                            <button onClick={onClose} className="text-slate-400 hover:text-white">
+                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                            </button>
+                        </div>
+                        <div className="space-y-4 text-sm text-slate-300">
+                            <div>
+                                <h4 className="font-semibold text-white mb-2">What is Pollinations?</h4>
+                                <p>Pollinations AI is an AI generation service that powers the auto-filling, club logo and face generation features in this app.</p>
+                            </div>
+                            <div>
+                                <h4 className="font-semibold text-white mb-2">What is Pollen (💎)?</h4>
+                                <p>💎 represents 1 Pollen, which is Pollinations' credit system. Free accounts include credits to get started.</p>
+                            </div>
+                            <div>
+                                <h4 className="font-semibold text-white mb-2">What is it used for?</h4>
+                                <ul className="list-disc list-inside space-y-1 text-slate-400">
+                                    <li>Generating club logos with AI</li>
+                                    <li>Creating realistic player faces</li>
+                                    <li>Auto-filling club data with AI text generation</li>
+                                </ul>
+                            </div>
+                            <div>
+                                <h4 className="font-semibold text-white mb-2">How is your API key stored?</h4>
+                                <p>Your Pollinations API key is stored <strong>locally in your browser</strong> using localStorage. It never leaves your device and is only sent directly to Pollinations when generating images.</p>
+                            </div>
+                            <div className="bg-blue-600/10 border border-blue-600/30 rounded-lg p-3">
+                                <p className="text-xs text-blue-400">
+                                    🔒 <strong>Privacy:</strong> We don't have access to your API key or any of your data. Everything stays on your device.
+                                </p>
+                            </div>
+                            <div className="pt-2">
+                                <a href="https://pollinations.ai" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300 text-sm underline flex items-center gap-1 justify-center">
+                                    Learn more about Pollinations
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                                    </svg>
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // ==========================================
+        // ==========================================
+        // MAIN APP - HeroUI Design
+        // ==========================================
+        const PROXY_URL = window.location.origin;
+        
+        // Helper function to upload image to Cloudflare Images
+        const uploadImageToCloudflare = async (blob, filename = 'image.png') => {
+            const formData = new FormData();
+            formData.append('file', blob, filename);
+            
+            const response = await fetch(`${PROXY_URL}/upload`, {
+                method: 'POST',
+                body: formData
+            });
+            
+            if (!response.ok) {
+                throw new Error('Failed to upload image');
+            }
+            
+            const result = await response.json();
+            return result.url;
+        };
+        
+        const App = () => {
+            // Map URL hash to view names
+            const getViewFromHash = (hash) => {
+                const route = hash.replace('#', '').split('?')[0]; // Remove # and any query params
+                const routeMap = {
+                    'home': 'home',
+                    'cc': 'club',
+                    'club': 'club',
+                    'rc': 'regen',
+                    'regen': 'regen',
+                    'retain': 'retain'
+                };
+                return routeMap[route] || 'home';
+            };
+            
+            const [view, setView] = useState(getViewFromHash(window.location.hash));
+            const [pollinationsKey, setPollinationsKey] = useState('');
+            const [showHelpModal, setShowHelpModal] = useState(false);
+            const [showPrivacyModal, setShowPrivacyModal] = useState(false);
+            
+            const handleDisconnectPollinations = () => {
+                localStorage.removeItem('fm_pollinations_key');
+                setPollinationsKey('');
+            };
+            
+            // Function to change view and update URL
+            const changeView = (newView) => {
+                const viewToHash = {
+                    'home': 'home',
+                    'club': 'cc',
+                    'regen': 'rc',
+                    'retain': 'retain'
+                };
+                window.location.hash = viewToHash[newView] || 'home';
+                setView(newView);
+            };
+            
+            useEffect(() => {
+                // Check for Pollinations API key in URL hash (OAuth redirect)
+                const hash = window.location.hash.slice(1);
+                const params = new URLSearchParams(hash);
+                const apiKeyFromUrl = params.get('api_key');
+                
+                if (apiKeyFromUrl) {
+                    // Validate API key format (basic validation - alphanumeric, dashes, underscores)
+                    const isValidKey = /^[a-zA-Z0-9_-]+$/.test(apiKeyFromUrl) && apiKeyFromUrl.length > 10 && apiKeyFromUrl.length < 500;
+                    
+                    if (isValidKey) {
+                        // Store the API key and clean up URL
+                        localStorage.setItem('fm_pollinations_key', apiKeyFromUrl);
+                        setPollinationsKey(apiKeyFromUrl);
+                    } else {
+                        console.warn('Invalid API key format detected');
+                    }
+                    // Preserve the current view hash
+                    const currentView = getViewFromHash(window.location.hash);
+                    const viewToHash = {
+                        'home': 'home',
+                        'club': 'cc',
+                        'regen': 'rc',
+                        'retain': 'retain',
+                        'settings': 'settings'
+                    };
+                    window.location.hash = viewToHash[currentView] || 'home';
+                } else {
+                    // Load saved key
+                    const savedPollinationsKey = localStorage.getItem('fm_pollinations_key');
+                    if(savedPollinationsKey) setPollinationsKey(savedPollinationsKey);
+                }
+                
+                // Listen for hash changes (browser back/forward)
+                const handleHashChange = () => {
+                    setView(getViewFromHash(window.location.hash));
+                };
+                window.addEventListener('hashchange', handleHashChange);
+                return () => window.removeEventListener('hashchange', handleHashChange);
+            }, []);
+
+            return (
+                <div className="min-h-screen bg-black flex flex-col">
+                    {/* Unified Top Bar */}
+                    <header className="bg-zinc-950/50 backdrop-blur-xl border-b border-zinc-800 sticky top-0 z-10">
+                        <div className="grid grid-cols-[18rem_1fr] items-center gap-6 px-8 py-3">
+                            {/* Left: Brand (matches sidebar header) */}
+                            <div className="pr-4">
+                                <div className="flex items-center gap-2">
+                                    <h1 className="text-2xl font-black tracking-tight">
+                                        <span className="text-white">FM26</span>{' '}
+                                        <span className="bg-gradient-to-r from-blue-500 to-cyan-500 bg-clip-text text-transparent">CREATOR</span>
+                                    </h1>
+                                    <Chip color="primary" className="text-xs">v{VERSION}</Chip>
+                                </div>
+                                <p className="text-xs text-zinc-500 font-mono mt-1 uppercase">Console Edition</p>
+                            </div>
+                            {/* Right: Title with inline chips */}
+                            <div className="flex justify-between items-center">
+                                <h2 className={`text-2xl font-bold ${view === 'home' ? 'text-cyan-400' : view === 'club' ? 'text-blue-400' : view === 'regen' ? 'text-emerald-400' : view === 'retain' ? 'text-purple-400' : 'text-orange-400'}`}>
+                                    {view === 'home' ? 'Welcome' : view === 'club' ? 'Create Your Club' : view === 'regen' ? 'Design Future Star' : view === 'retain' ? 'Retain Players Creator' : 'Settings'}
+                                </h2>
+                                <div className="flex items-center gap-2">
+                                    {view !== 'home' && <Chip color="primary">Console Version</Chip>}
+                                    {view === 'club' && (
+                                        <Chip color="warning"><Icon name="triangle-exclamation" /> FMRTE 26 needed</Chip>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    </header>
+                    <div className="flex flex-1">
+                    {/* Sidebar */}
+                    <aside className="w-72 bg-zinc-950 border-r border-zinc-800 flex flex-col">
+
+                        {/* Navigation */}
+                        <nav className="flex-1 p-4 space-y-2">
+                            <button
+                                onClick={() => changeView('home')}
+                                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left transition-all mb-4 ${
+                                    view === 'home' 
+                                        ? 'bg-gradient-to-r from-cyan-600 to-blue-500 text-white shadow-lg shadow-cyan-500/30' 
+                                        : 'text-zinc-400 hover:bg-zinc-900 hover:text-white'
+                                }`}
+                            >
+                                <div className={`w-10 h-10 flex items-center justify-center rounded-lg ${
+                                    view === 'home' ? 'bg-white/20' : 'bg-zinc-800'
+                                }`}>
+                                    🏠
+                                </div>
+                                <div className="flex-1">
+                                    <div className="font-semibold text-sm">Home</div>
+                                    <div className="text-xs opacity-70">Start Here</div>
+                                </div>
+                            </button>
+
+                            <p className="text-xs font-bold text-zinc-600 uppercase tracking-wider mb-4 px-2">
+                                ⚡ Creators
+                            </p>
+                            
+                            <button
+                                onClick={() => changeView('club')}
+                                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left transition-all ${
+                                    view === 'club' 
+                                        ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-lg shadow-blue-500/30' 
+                                        : 'text-zinc-400 hover:bg-zinc-900 hover:text-white'
+                                }`}
+                            >
+                                <div className={`w-10 h-10 flex items-center justify-center rounded-lg ${
+                                    view === 'club' ? 'bg-white/20' : 'bg-zinc-800'
+                                }`}>
+                                    🛡️
+                                </div>
+                                <div className="flex-1">
+                                    <div className="font-semibold text-sm">Club</div>
+                                    <div className="text-xs opacity-70">Create a Team</div>
+                                </div>
+                            </button>
+
+                            <button
+                                onClick={() => changeView('regen')}
+                                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left transition-all ${
+                                    view === 'regen' 
+                                        ? 'bg-gradient-to-r from-green-600 to-emerald-500 text-white shadow-lg shadow-green-500/30' 
+                                        : 'text-zinc-400 hover:bg-zinc-900 hover:text-white'
+                                }`}
+                            >
+                                <div className={`w-10 h-10 flex items-center justify-center rounded-lg ${
+                                    view === 'regen' ? 'bg-white/20' : 'bg-zinc-800'
+                                }`}>
+                                    👤
+                                </div>
+                                <div className="flex-1">
+                                    <div className="font-semibold text-sm">Regen/Newgen</div>
+                                    <div className="text-xs opacity-70">Custom Players</div>
+                                </div>
+                            </button>
+
+                            <button
+                                onClick={() => changeView('retain')}
+                                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left transition-all ${
+                                    view === 'retain' 
+                                        ? 'bg-gradient-to-r from-purple-600 to-pink-500 text-white shadow-lg shadow-purple-500/30' 
+                                        : 'text-zinc-400 hover:bg-zinc-900 hover:text-white'
+                                }`}
+                            >
+                                <div className={`w-10 h-10 flex items-center justify-center rounded-lg ${
+                                    view === 'retain' ? 'bg-white/20' : 'bg-zinc-800'
+                                }`}>
+                                    🔒
+                                </div>
+                                <div className="flex-1">
+                                    <div className="font-semibold text-sm">Retain Players</div>
+                                    <div className="text-xs opacity-70">Database Management</div>
+                                </div>
+                            </button>
+
+                        </nav>
+
+                        {/* External Tools */}
+                        <div className="px-4 py-3 border-t border-zinc-800 space-y-2">
+                            <p className="text-xs font-bold text-zinc-600 uppercase tracking-wider mb-3 px-2">
+                                🔧 External
+                            </p>
+                            <a href="https://fmkitcreator.com/" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 px-3 py-2 rounded-lg text-left text-zinc-400 hover:text-white hover:bg-zinc-900 transition-all text-sm">
+                                <img src="https://fmkitcreator.com/kit-creator/favicon_fm.png" alt="Kit Creator" className="w-4 h-4 rounded" />
+                                Kit Creator
+                            </a>
+                            <a href="https://www.fmrte.com/files/category/52-football-manager-26/" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 px-3 py-2 rounded-lg text-left text-zinc-400 hover:text-white hover:bg-zinc-900 transition-all text-sm">
+                                <img src="https://www.fmrte.com/uploads/monthly_2025_10/fmrte-26_Base_Image_128.thumb.png.861c27d683f39c278d5bd281b1e5c3fb.png" alt="FMRTE 26" className="w-4 h-4 rounded" />
+                                FMRTE 26
+                            </a>
+                        </div>
+
+                        {/* Pollinations Status */}
+                        <div className="p-4 border-t border-zinc-800">
+                            <div className="bg-slate-900 border border-slate-700 rounded-lg p-3">
+                                <div className="flex items-center justify-between mb-2">
+                                    <div className="flex items-center gap-2">
+                                        <img src="https://enter.pollinations.ai/apple-touch-icon.png" alt="Pollinations" className="w-5 h-5 rounded" />
+                                        <span className="text-xs font-semibold text-slate-300">pollinations.ai</span>
+                                        <button 
+                                            onClick={() => setShowHelpModal(true)}
+                                            className="w-4 h-4 flex items-center justify-center bg-slate-700 hover:bg-slate-600 rounded-full text-[10px] text-slate-400 hover:text-white transition-colors"
+                                            title="What is this?"
+                                        >
+                                            ?
+                                        </button>
+                                    </div>
+                                </div>
+                                {pollinationsKey ? (
+                                    <div className="space-y-2">
+                                        <div className="flex items-center gap-2">
+                                            <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                                            <span className="text-xs text-green-400 font-medium">Connected</span>
+                                        </div>
+                                        <button
+                                            onClick={handleDisconnectPollinations}
+                                            className="w-full text-xs text-red-400 hover:text-red-300 hover:bg-red-600/10 py-1.5 px-2 rounded transition-colors"
+                                        >
+                                            Disconnect
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <button
+                                        onClick={() => {
+                                            const currentUrl = window.location.href.split('#')[0];
+                                            window.location.href = `https://enter.pollinations.ai/authorize?redirect_url=${encodeURIComponent(currentUrl)}`;
+                                        }}
+                                        className="w-full text-xs bg-blue-600 hover:bg-blue-500 text-white font-semibold py-2 px-3 rounded-lg transition-colors"
+                                    >
+                                        Connect Account
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+                    </aside>
+
+                    {/* Main Content */}
+                    <main className="flex-1 flex flex-col">
+
+                        {/* Content */}
+                        <div className="flex-1 overflow-y-auto p-8">
+                            <div className="max-w-7xl mx-auto">
+                                {view === 'home' && <LandingPage onNavigate={changeView} />}
+                                {view === 'club' && <ClubCreator pollinationsKey={pollinationsKey} />}
+                                {view === 'regen' && <RegenCreator pollinationsKey={pollinationsKey} />}
+                                {view === 'retain' && <RetainPlayersCreator />}
+                            </div>
+                        </div>
+                        
+                        {/* Footer */}
+                        <div className="text-center py-4 text-xs text-zinc-600 border-t border-zinc-800">
+                            <div className="flex items-center justify-center gap-4">
+                                <span>Made by SanneD</span>
+                                <span className="text-zinc-700">•</span>
+                                <button 
+                                    onClick={() => setShowPrivacyModal(true)}
+                                    className="text-zinc-500 hover:text-zinc-300 transition-colors underline"
+                                >
+                                    Privacy Notice
+                                </button>
+                            </div>
+                        </div>
+                    </main>
+                    </div>
+                    
+                    {/* Help Modal */}
+                    <HelpModal isOpen={showHelpModal} onClose={() => setShowHelpModal(false)} />
+                    
+                    {/* Privacy Modal */}
+                    <PrivacyModal isOpen={showPrivacyModal} onClose={() => setShowPrivacyModal(false)} />
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
