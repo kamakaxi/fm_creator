@@ -784,100 +784,6 @@ EXAMPLE OUTPUT:
                  dl.href = str; dl.download = `${data.newName}_Setup.json`; dl.click();
             };
 
-            /**
-             * Generates and downloads a .ct file for Cheat Engine
-             */
-            const downloadCheatTable = () => {
-                if (!data.origID) return alert('ID Required');
-                
-                const clubId = data.origID;
-                const preset = createFMRTEPreset();
-                
-                let entries = "";
-                
-                // Mapping logic for FM26 Console
-                const getMapping = (prop) => {
-                    const maps = {
-                        "Finances.Balance": { off: "4B8", type: "4 Bytes" },
-                        "Finances.SeasonTransferBudget": { off: "4C0", type: "8 Bytes" },
-                        "Finances.RemainingTransferBudget": { off: "4C8", type: "8 Bytes" },
-                        "Finances.WageBudget": { off: "4D0", type: "8 Bytes" },
-                        "Finances.MaxWage": { off: "4D8", type: "8 Bytes" },
-                        "Finances.YouthRecruitment": { off: "4E0", type: "4 Bytes" },
-                        "Reputation": { off: "12", type: "4 Bytes" },
-                        "YearFounded": { off: "10", type: "4 Bytes" },
-                        "AverageAttendance": { off: "34", type: "4 Bytes" },
-                        "SeasonTicketHolders": { off: "38", type: "4 Bytes" },
-                        "TrainingFacilities": { off: "118", type: "4 Bytes" },
-                        "YouthFacilities": { off: "11C", type: "4 Bytes" },
-                        "YouthRecruitment": { off: "120", type: "4 Bytes" },
-                        "ProfessionalStatus": { off: "138", type: "4 Bytes" },
-                        "SugarDaddyType": { off: "13C", type: "4 Bytes" },
-                        "Morale": { off: "140", type: "Float" },
-                        "Stadium.Capacity": { off: "24", type: "4 Bytes" },
-                        "Stadium.IsTrainingGround": { off: "28", type: "4 Bytes" },
-                        "SupportersProfile.Passion": { off: "210", type: "Float" },
-                        "SupportersProfile.Loyalty": { off: "214", type: "Float" },
-                        "SupportersProfile.Temperament": { off: "218", type: "Float" },
-                        "SupportersProfile.Patience": { off: "21C", type: "Float" },
-                        "SupportersProfile.Expectations": { off: "220", type: "Float" },
-                        "SupportersProfile.Affluence": { off: "224", type: "Float" }
-                    };
-                    return maps[prop] || null;
-                };
-
-                preset.Actions.forEach((action, index) => {
-                    const map = getMapping(action.TargetProperty);
-                    if (map) {
-                        entries += `
-    <CheatEntry>
-      <ID>${index + 100}</ID>
-      <Description>"Set ${action.TargetProperty}"</Description>
-      <VariableType>${map.type}</VariableType>
-      <Address>"fm.exe"+02B5AC00</Address>
-      <Offsets>
-        <Offset>${map.off}</Offset>
-        <Offset>${clubId * 8}</Offset>
-        <Offset>20</Offset>
-        <Offset>88</Offset>
-      </Offsets>
-      <Value>${action.Value}</Value>
-    </CheatEntry>`;
-                    }
-                });
-
-                const ctTemplate = `<?xml version="1.0" encoding="utf-8"?>
-<CheatTable CheatEngineTableVersion="46">
-  <CheatEntries>
-    <CheatEntry>
-      <ID>1</ID>
-      <Description>"--- FM26 CONSOLE CREATOR [${data.newName}] ---"</Description>
-      <Options moHideChildren="1" moRecursiveSetValue="1" moActivateChildrenAsWell="1"/>
-      <GroupHeader>1</GroupHeader>
-      <CheatEntries>${entries}
-      </CheatEntries>
-    </CheatEntry>
-  </CheatEntries>
-  <LuaScript>
-    -- Auto-attach to FM26 process
-    local processName = "fm.exe"
-    if getProcessIDFromProcessName(processName) ~= nil then
-        openProcess(processName)
-        print("Successfully attached to FM26!")
-    else
-        print("FM26 (fm.exe) not found. Please open the game first.")
-    end
-  </LuaScript>
-</CheatTable>`;
-
-                const blob = new Blob([ctTemplate], { type: 'application/octet-stream' });
-                const url = window.URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = `${data.newName.replace(/ /g, '_')}_Console_Fix.ct`;
-                a.click();
-                window.URL.revokeObjectURL(url);
-            };
 
             return (
                 <div className="grid md:grid-cols-2 gap-8">
@@ -1093,11 +999,6 @@ EXAMPLE OUTPUT:
                                     <button onClick={downloadJSON} className="w-full text-slate-400 hover:text-white hover:bg-slate-700 py-2 px-4 rounded-xl border border-slate-600 text-sm font-medium flex items-center justify-center gap-2">
                                         <img src="https://www.fmrte.com/uploads/monthly_2025_10/fmrte-26-512.png" alt="FMRTE 26" className="w-5 h-5 rounded" />
                                         JSON Only
-                                    </button>
-                                    
-                                    <button onClick={downloadCheatTable} className="w-full text-slate-400 hover:text-white hover:bg-slate-700 py-2 px-4 rounded-xl border border-slate-600 text-sm font-medium flex items-center justify-center gap-2">
-                                        <Icon name="table-list" />
-                                        Cheat Engine Table (.ct)
                                     </button>
                                     
                                     <button onClick={saveSettings} className="w-full bg-blue-600 hover:bg-blue-500 text-white font-semibold py-2 rounded-xl flex items-center justify-center gap-2">
