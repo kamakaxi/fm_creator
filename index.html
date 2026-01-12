@@ -803,12 +803,14 @@ EXAMPLE OUTPUT:
                         "Finances.RemainingTransferBudget": { off: "4C8", type: "8 Bytes" },
                         "Finances.WageBudget": { off: "4D0", type: "8 Bytes" },
                         "Finances.MaxWage": { off: "4D8", type: "8 Bytes" },
+                        "Finances.YouthRecruitment": { off: "4E0", type: "4 Bytes" },
                         "Reputation": { off: "12", type: "4 Bytes" },
                         "YearFounded": { off: "10", type: "4 Bytes" },
                         "AverageAttendance": { off: "34", type: "4 Bytes" },
                         "SeasonTicketHolders": { off: "38", type: "4 Bytes" },
                         "TrainingFacilities": { off: "118", type: "4 Bytes" },
                         "YouthFacilities": { off: "11C", type: "4 Bytes" },
+                        "YouthRecruitment": { off: "120", type: "4 Bytes" },
                         "ProfessionalStatus": { off: "138", type: "4 Bytes" },
                         "SugarDaddyType": { off: "13C", type: "4 Bytes" },
                         "Morale": { off: "140", type: "Float" },
@@ -850,11 +852,22 @@ EXAMPLE OUTPUT:
     <CheatEntry>
       <ID>1</ID>
       <Description>"--- FM26 CONSOLE CREATOR [${data.newName}] ---"</Description>
+      <Options moHideChildren="1" moRecursiveSetValue="1" moActivateChildrenAsWell="1"/>
       <GroupHeader>1</GroupHeader>
       <CheatEntries>${entries}
       </CheatEntries>
     </CheatEntry>
   </CheatEntries>
+  <LuaScript>
+    -- Auto-attach to FM26 process
+    local processName = "fm.exe"
+    if getProcessIDFromProcessName(processName) ~= nil then
+        openProcess(processName)
+        print("Successfully attached to FM26!")
+    else
+        print("FM26 (fm.exe) not found. Please open the game first.")
+    end
+  </LuaScript>
 </CheatTable>`;
 
                 const blob = new Blob([ctTemplate], { type: 'application/octet-stream' });
