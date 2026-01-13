@@ -460,6 +460,75 @@
             const [crestCloudflareUrl, setCrestCloudflareUrl] = useState(null);
             const [aiModel, setAiModel] = useState('gptimage-large');
             const [saveNotification, setSaveNotification] = useState(false);
+            const [modelPricing, setModelPricing] = useState({});
+            const [crestCooldowns, setCrestCooldowns] = useState({});
+
+            // Token weights for token-based models
+            const TOKEN_WEIGHTS = {
+                "gptimage": 1785,
+                "gptimage-large": 1562,
+                "nanobanana": 1333,
+                "nanobanana-pro": 1388
+            };
+
+            // Update crest cooldown timers every second
+            React.useEffect(() => {
+                const timer = setInterval(() => {
+                    setCrestCooldowns(prev => {
+                        const updated = { ...prev };
+                        ['flux-free', 'zimage-free'].forEach(model => {
+                            const remaining = getFreeCooldownRemaining('crest', model);
+                            updated[model] = remaining > 0 ? Math.ceil(remaining / 1000) : 0;
+                        });
+                        return updated;
+                    });
+                }, 1000);
+                return () => clearInterval(timer);
+            }, []);
+
+            // Fetch dynamic pricing from Pollinations API (cached for 24 hours)
+            React.useEffect(() => {
+                const cachedData = localStorage.getItem('pollinations_pricing');
+                const cachedTime = localStorage.getItem('pollinations_pricing_time');
+                const now = Date.now();
+                const ONE_DAY = 24 * 60 * 60 * 1000;
+
+                // Use cached data if less than 24 hours old
+                if (cachedData && cachedTime && (now - parseInt(cachedTime)) < ONE_DAY) {
+                    setModelPricing(JSON.parse(cachedData));
+                    return;
+                }
+
+                // Fetch fresh data
+                fetch('https://gen.pollinations.ai/image/models')
+                    .then(res => res.json())
+                    .then(models => {
+                        const pricing = {};
+                        models.forEach(model => {
+                            if (model.pricing?.completionImageTokens) {
+                                const price = model.pricing.completionImageTokens;
+                                let imagesPerPollen;
+
+                                if (TOKEN_WEIGHTS[model.name]) {
+                                    imagesPerPollen = 1 / (price * TOKEN_WEIGHTS[model.name]);
+                                } else {
+                                    imagesPerPollen = 1 / price;
+                                }
+
+                                // Format for display
+                                if (imagesPerPollen >= 1000) {
+                                    pricing[model.name] = (imagesPerPollen / 1000).toFixed(1).replace('.0', '') + 'K';
+                                } else {
+                                    pricing[model.name] = Math.floor(imagesPerPollen).toString();
+                                }
+                            }
+                        });
+                        setModelPricing(pricing);
+                        localStorage.setItem('pollinations_pricing', JSON.stringify(pricing));
+                        localStorage.setItem('pollinations_pricing_time', now.toString());
+                    })
+                    .catch(err => console.error('Failed to fetch pricing:', err));
+            }, []);
             
             const [data, setData] = useState({
                 // Identity
@@ -512,11 +581,17 @@
             };
 
             const generateAI = async () => {
-                // Require authentication
-                if (!pollinationsKey) {
-                    const currentUrl = window.location.href.split('#')[0];
-                    window.location.href = `https://enter.pollinations.ai/authorize?redirect_url=${encodeURIComponent(currentUrl)}`;
-                    return;
+                // Use user key if available, otherwise fall back to provided free key for text generation (Gemini)
+                const usingFreeKey = !pollinationsKey;
+                const apiKeyToUse = pollinationsKey || FREE_API_KEY;
+
+                if (usingFreeKey) {
+                    const remaining = getFreeCooldownRemaining('text', 'gemini-fast');
+                    if (remaining > 0) {
+                        const minutes = Math.ceil(remaining / 60000);
+                        alert(`Free text generation is on cooldown. Please wait ${minutes} minute(s) or connect your Pollinations account.`);
+                        return;
+                    }
                 }
                 
                 setAiLoading(true);
@@ -561,7 +636,7 @@ EXAMPLE OUTPUT:
                     
                     const response = await fetch(url, {
                         headers: {
-                            'Authorization': `Bearer ${pollinationsKey}`
+                            'Authorization': `Bearer ${apiKeyToUse}`
                         }
                     });
                     
@@ -593,6 +668,8 @@ EXAMPLE OUTPUT:
                     });
                     setData(prev => ({ ...prev, ...formatted }));
                     setActiveTab('identity');
+
+                    if (usingFreeKey) incrementFreeUsage('text', 'gemini-fast');
                 } catch(err) { 
                     alert('AI Error: ' + err.message); 
                 } finally { 
@@ -601,8 +678,21 @@ EXAMPLE OUTPUT:
             };
 
             const generateCrestAI = async () => {
-                // Require authentication
-                if (!pollinationsKey) {
+                // Allow free models (Flux Schnell & Z-Image Turbo) using built-in key with cooldown
+                const isFreeModel = ['flux-free', 'zimage-free'].includes(aiModel);
+                const apiKeyToUse = pollinationsKey || (isFreeModel ? FREE_API_KEY : null);
+
+                if (isFreeModel && !pollinationsKey) {
+                    const remaining = getFreeCooldownRemaining('crest', aiModel);
+                    if (remaining > 0) {
+                        const minutes = Math.ceil(remaining / 60000);
+                        alert(`Free crest generation is on cooldown. Please wait ${minutes} minute(s) or connect your Pollinations account.`);
+                        return;
+                    }
+                }
+
+                // If user selects paid models without connecting, redirect to Pollinations OAuth
+                if (!apiKeyToUse) {
                     const currentUrl = window.location.href.split('#')[0];
                     window.location.href = `https://enter.pollinations.ai/authorize?redirect_url=${encodeURIComponent(currentUrl)}`;
                     return;
@@ -626,11 +716,12 @@ EXAMPLE OUTPUT:
 
                 try {
                     const randomSeed = Math.floor(Math.random() * 2147483647);
-                    const proxyUrl = `${PROXY_URL}/api?prompt=${encodeURIComponent(fullPrompt)}&negative_prompt=${encodeURIComponent(negativePrompt)}&model=${aiModel}&width=1024&height=1024&nologo=true&enhance=false&seed=${randomSeed}`;
+                    const selectedModel = aiModel === 'flux-free' ? 'flux' : aiModel === 'zimage-free' ? 'zimage' : aiModel;
+                    const proxyUrl = `${PROXY_URL}/api?prompt=${encodeURIComponent(fullPrompt)}&negative_prompt=${encodeURIComponent(negativePrompt)}&model=${selectedModel}&width=1024&height=1024&nologo=true&enhance=false&seed=${randomSeed}`;
                     
                     const response = await fetch(proxyUrl, {
                         headers: {
-                            'Authorization': `Bearer ${pollinationsKey}`
+                            'Authorization': `Bearer ${apiKeyToUse}`
                         }
                     });
                     
@@ -640,6 +731,8 @@ EXAMPLE OUTPUT:
                     
                     const objectUrl = URL.createObjectURL(blob);
                     setCrestUrl(objectUrl);
+
+                    if (isFreeModel && !pollinationsKey) incrementFreeUsage('crest', aiModel);
                     
                     // Upload to Cloudflare Images
                     try {
@@ -783,7 +876,6 @@ EXAMPLE OUTPUT:
                  const dl = document.createElement('a');
                  dl.href = str; dl.download = `${data.newName}_Setup.json`; dl.click();
             };
-
 
             return (
                 <div className="grid md:grid-cols-2 gap-8">
@@ -969,16 +1061,21 @@ EXAMPLE OUTPUT:
                                 
                                 <div className="mb-3">
                                     <label className="text-xs text-slate-400 block mb-2 text-left">AI Model</label>
-                                    <select value={aiModel} onChange={e=>setAiModel(e.target.value)} disabled={!pollinationsKey} className="w-full bg-slate-900 border border-slate-600 rounded p-2 text-sm text-white disabled:opacity-50 disabled:cursor-not-allowed">
-                                        <option value="gptimage-large">GPT Image 1.5 (40 images/💎)</option>
-                                        <option value="kontext">FLUX.1 Kontext (25 images/💎)</option>
-                                        <option value="seedream-pro">Seedream 4.5 Pro (25 images/💎)</option>
-                                        <option value="nanobanana-pro">NanoBanana Pro (10 images/💎)</option>
+                                    <select value={aiModel} onChange={e=>setAiModel(e.target.value)} className="w-full bg-slate-900 border border-slate-600 rounded p-2 text-sm text-white">
+                                        <option value="flux-free">{`Flux Schnell (Free${crestCooldowns['flux-free'] ? ` - ${crestCooldowns['flux-free']}s cooldown` : ')'}`}</option>
+                                        <option value="zimage-free">{`Z-Image Turbo (Free${crestCooldowns['zimage-free'] ? ` - ${crestCooldowns['zimage-free']}s cooldown` : ')'})`}</option>
+                                        <option value="flux">Flux Schnell ({modelPricing['flux'] || '...'} images/💎)</option>
+                                        <option value="zimage">Z-Image Turbo ({modelPricing['zimage'] || '...'} images/💎)</option>
+                                        <option value="gptimage">GPT Image ({modelPricing['gptimage'] || '...'} images/💎)</option>
+                                        <option value="gptimage-large">GPT Image 1.5 ({modelPricing['gptimage-large'] || '...'} images/💎)</option>
+                                        <option value="kontext">FLUX.1 Kontext ({modelPricing['kontext'] || '...'} images/💎)</option>
+                                        <option value="seedream-pro">Seedream 4.5 Pro ({modelPricing['seedream-pro'] || '...'} images/💎)</option>
+                                        <option value="nanobanana-pro">NanoBanana Pro ({modelPricing['nanobanana-pro'] || '...'} images/💎)</option>
                                     </select>
                                     <p className="text-[10px] text-slate-500 mt-1">💎 (Pollen) is Pollinations' credit system. Free account includes credits.</p>
                                 </div>
                                 
-                                <button onClick={generateCrestAI} disabled={aiCrestLoading || !pollinationsKey} className="w-full bg-pink-600 hover:bg-pink-500 text-white py-2 rounded text-sm font-bold flex justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
+                                <button onClick={generateCrestAI} disabled={aiCrestLoading || (!pollinationsKey && !['flux-free','zimage-free'].includes(aiModel))} className="w-full bg-pink-600 hover:bg-pink-500 text-white py-2 rounded text-sm font-bold flex justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
                                     {aiCrestLoading ? 'Generating...' : 'Generate Crest'}
                                 </button>
                                 {(crestCloudflareUrl || crestUrl) && (
@@ -1011,6 +1108,7 @@ EXAMPLE OUTPUT:
                                         </div>
                                     )}
                                 </div>
+                                
                             </div>
 
                             {/* Instructions */}
@@ -1053,6 +1151,75 @@ EXAMPLE OUTPUT:
             const [faceCloudflareUrl, setFaceCloudflareUrl] = useState(null);
             const [saveNotification, setSaveNotification] = useState(false);
             const [zipLoading, setZipLoading] = useState(false);
+            const [modelPricing, setModelPricing] = useState({});
+            const [faceCooldowns, setFaceCooldowns] = useState({});
+
+            // Timer effect for cooldown display on face generator
+            React.useEffect(() => {
+                const timer = setInterval(() => {
+                    setFaceCooldowns(prev => {
+                        const updated = { ...prev };
+                        ['flux-free', 'zimage-free'].forEach(model => {
+                            const remaining = getFreeCooldownRemaining('face', model);
+                            updated[model] = remaining > 0 ? Math.ceil(remaining / 1000) : 0;
+                        });
+                        return updated;
+                    });
+                }, 1000);
+                return () => clearInterval(timer);
+            }, []);
+
+            // Token weights for token-based models
+            const TOKEN_WEIGHTS = {
+                "gptimage": 1785,
+                "gptimage-large": 1562,
+                "nanobanana": 1333,
+                "nanobanana-pro": 1388
+            };
+
+            // Fetch dynamic pricing from Pollinations API (cached for 24 hours)
+            React.useEffect(() => {
+                const cachedData = localStorage.getItem('pollinations_pricing');
+                const cachedTime = localStorage.getItem('pollinations_pricing_time');
+                const now = Date.now();
+                const ONE_DAY = 24 * 60 * 60 * 1000;
+
+                // Use cached data if less than 24 hours old
+                if (cachedData && cachedTime && (now - parseInt(cachedTime)) < ONE_DAY) {
+                    setModelPricing(JSON.parse(cachedData));
+                    return;
+                }
+
+                // Fetch fresh data
+                fetch('https://gen.pollinations.ai/image/models')
+                    .then(res => res.json())
+                    .then(models => {
+                        const pricing = {};
+                        models.forEach(model => {
+                            if (model.pricing?.completionImageTokens) {
+                                const price = model.pricing.completionImageTokens;
+                                let imagesPerPollen;
+
+                                if (TOKEN_WEIGHTS[model.name]) {
+                                    imagesPerPollen = 1 / (price * TOKEN_WEIGHTS[model.name]);
+                                } else {
+                                    imagesPerPollen = 1 / price;
+                                }
+
+                                // Format for display
+                                if (imagesPerPollen >= 1000) {
+                                    pricing[model.name] = (imagesPerPollen / 1000).toFixed(1).replace('.0', '') + 'K';
+                                } else {
+                                    pricing[model.name] = Math.floor(imagesPerPollen).toString();
+                                }
+                            }
+                        });
+                        setModelPricing(pricing);
+                        localStorage.setItem('pollinations_pricing', JSON.stringify(pricing));
+                        localStorage.setItem('pollinations_pricing_time', now.toString());
+                    })
+                    .catch(err => console.error('Failed to fetch pricing:', err));
+            }, []);
 
             // Load saved settings on mount
             useEffect(() => {
@@ -1137,8 +1304,21 @@ EXAMPLE OUTPUT:
             };
 
             const generateFace = async () => {
-                // Require authentication
-                if (!pollinationsKey) {
+                // Allow free models (Flux Schnell & Z-Image Turbo) using built-in key with cooldown
+                const isFreeModel = ['flux-free', 'zimage-free'].includes(rData.aiModel);
+                const apiKeyToUse = pollinationsKey || (isFreeModel ? FREE_API_KEY : null);
+
+                if (isFreeModel && !pollinationsKey) {
+                    const remaining = getFreeCooldownRemaining('face', rData.aiModel);
+                    if (remaining > 0) {
+                        const minutes = Math.ceil(remaining / 60000);
+                        alert(`Free face generation is on cooldown. Please wait ${minutes} minute(s) or connect your Pollinations account.`);
+                        return;
+                    }
+                }
+
+                // If user selects paid models without connecting, redirect to Pollinations OAuth
+                if (!apiKeyToUse) {
                     const currentUrl = window.location.href.split('#')[0];
                     window.location.href = `https://enter.pollinations.ai/authorize?redirect_url=${encodeURIComponent(currentUrl)}`;
                     return;
@@ -1262,11 +1442,12 @@ EXAMPLE OUTPUT:
                 
                 try {
                     const randomSeed = Math.floor(Math.random() * 2147483647);
-                    const proxyUrl = `${PROXY_URL}/api?prompt=${encodeURIComponent(desc)}&negative_prompt=${encodeURIComponent(negativePrompt)}&model=${rData.aiModel}&width=2048&height=2048&nologo=true&safe=false&quality=hd&seed=${randomSeed}`;
+                    const selectedModel = rData.aiModel === 'flux-free' ? 'flux' : rData.aiModel === 'zimage-free' ? 'zimage' : rData.aiModel;
+                    const proxyUrl = `${PROXY_URL}/api?prompt=${encodeURIComponent(desc)}&negative_prompt=${encodeURIComponent(negativePrompt)}&model=${selectedModel}&width=2048&height=2048&nologo=true&safe=false&quality=hd&seed=${randomSeed}`;
                     
                     const response = await fetch(proxyUrl, {
                         headers: {
-                            'Authorization': `Bearer ${pollinationsKey}`
+                            'Authorization': `Bearer ${apiKeyToUse}`
                         }
                     });
                     
@@ -1276,6 +1457,8 @@ EXAMPLE OUTPUT:
                     
                     const objectUrl = URL.createObjectURL(blob);
                     setFaceUrl(objectUrl);
+
+                    if (isFreeModel && !pollinationsKey) incrementFreeUsage('face', rData.aiModel);
                     
                     // Upload to Cloudflare Images
                     try {
@@ -1684,17 +1867,19 @@ EXAMPLE OUTPUT:
                              
                              <div className="mb-3">
                                  <label className="text-xs text-slate-400 block mb-2 text-left">AI Model</label>
-                                 <select value={rData.aiModel} onChange={e=>updateRData('aiModel', e.target.value)} disabled={!pollinationsKey} className="w-full bg-slate-900 border border-slate-600 rounded p-2 text-sm text-white disabled:opacity-50 disabled:cursor-not-allowed">
-                                     <option value="flux">Flux Schnell (5k images/💎) - Best</option>
-                                     <option value="zimage">Z-Image Turbo (5k images/💎)</option>
-                                     <option value="gptimage-large">GPT Image 1.5 (40 images/💎)</option>
-                                     <option value="seedream-pro">Seedream 4.5 Pro (25 images/💎)</option>
-                                     <option value="nanobanana-pro">NanoBanana Pro (10 images/💎)</option>
+                                 <select value={rData.aiModel} onChange={e=>updateRData('aiModel', e.target.value)} className="w-full bg-slate-900 border border-slate-600 rounded p-2 text-sm text-white">
+                                     <option value="flux-free">{`Flux Schnell (Free${faceCooldowns['flux-free'] ? ` - ${faceCooldowns['flux-free']}s cooldown` : ')'} - Best`}</option>
+                                     <option value="zimage-free">{`Z-Image Turbo (Free${faceCooldowns['zimage-free'] ? ` - ${faceCooldowns['zimage-free']}s cooldown` : ')'})`}</option>
+                                     <option value="flux">Flux Schnell ({modelPricing['flux'] || '...'} images/💎) - Best</option>
+                                     <option value="zimage">Z-Image Turbo ({modelPricing['zimage'] || '...'} images/💎)</option>
+                                     <option value="gptimage-large">GPT Image 1.5 ({modelPricing['gptimage-large'] || '...'} images/💎)</option>
+                                     <option value="seedream-pro">Seedream 4.5 Pro ({modelPricing['seedream-pro'] || '...'} images/💎)</option>
+                                     <option value="nanobanana-pro">NanoBanana Pro ({modelPricing['nanobanana-pro'] || '...'} images/💎)</option>
                                  </select>
                                  <p className="text-[10px] text-slate-500 mt-1">💎 (Pollen) is Pollinations' credit system. Free account includes credits.</p>
                              </div>
                              
-                             <button onClick={generateFace} disabled={faceLoading || !pollinationsKey} className="w-full bg-pink-600 hover:bg-pink-500 text-white py-2 rounded text-sm font-bold flex justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
+                                      <button onClick={generateFace} disabled={faceLoading || (!pollinationsKey && !['flux-free','zimage-free'].includes(rData.aiModel))} className="w-full bg-pink-600 hover:bg-pink-500 text-white py-2 rounded text-sm font-bold flex justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
                                 {faceLoading ? 'Generating...' : 'Generate Face'}
                              </button>
                              {(faceCloudflareUrl || faceUrl) && <button onClick={downloadFace} className="block w-full mt-2 text-xs text-blue-400 hover:underline text-center cursor-pointer bg-transparent border-none">Download Image</button>}
@@ -2280,10 +2465,60 @@ EXAMPLE OUTPUT:
         };
 
         // ==========================================
-        // FUNCTION: SHOW PRIVACY POPUP
+        // PRIVACY MODAL
         // ==========================================
-        const showPrivacyNotice = () => {
-            alert(`PRIVACY NOTICE\n\n🔒 NO TRACKING\nThis website does not use tracking cookies or analytics services. Your visit is private.\n\n💾 LOCAL STORAGE\nWe use your browser's localStorage to remember your settings. This data stays on your device and is never sent to us.\n- pollinations_token: Remembers your API connection (OAuth)\n- app_settings: Saves your tool configurations\n\n🔌 THIRD-PARTY SERVICES\n• Pollinations AI: If you connect via OAuth, Pollinations handles your login. We don't store your credentials.\n• Cloudflare: Hosts this site and processes basic network data (like IP addresses) for security.\n\n🛡️ YOUR RIGHTS\nSince we don't collect personal data, we have no data to delete or export.\nFor questions, contact: contact@sanne.gay\n\n📖 OPEN SOURCE\nThis project is open source and hosted on GitHub. No personal data is collected or stored.`);
+        const PrivacyModal = ({ isOpen, onClose }) => {
+            if (!isOpen) return null;
+
+            return (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80" onClick={onClose}>
+                    <div className="bg-slate-900 border border-slate-700 rounded-xl p-6 max-w-md mx-4 shadow-2xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center justify-between mb-4">
+                            <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                                <span className="text-2xl">🔒</span>
+                                Privacy Notice
+                            </h3>
+                            <button onClick={onClose} className="text-slate-400 hover:text-white">
+                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                            </button>
+                        </div>
+                        <div className="space-y-4 text-sm text-slate-300">
+                            <div>
+                                <h4 className="font-semibold text-white mb-2">🔒 No Tracking</h4>
+                                <p>This website does not use tracking cookies or analytics services. Your visit is private.</p>
+                            </div>
+                            <div>
+                                <h4 className="font-semibold text-white mb-2">💾 Local Storage</h4>
+                                <p className="mb-2">We use your browser's localStorage to remember your settings. This data stays on your device and is never sent to us:</p>
+                                <ul className="list-disc list-inside space-y-1 text-slate-400">
+                                    <li><strong className="text-slate-300">pollinations_token:</strong> Remembers your API connection (OAuth)</li>
+                                    <li><strong className="text-slate-300">pollinations_pricing:</strong> Caches AI model pricing (refreshed daily)</li>
+                                    <li><strong className="text-slate-300">app_settings:</strong> Saves your tool configurations</li>
+                                </ul>
+                            </div>
+                            <div>
+                                <h4 className="font-semibold text-white mb-2">🔌 Third-Party Services</h4>
+                                <ul className="list-disc list-inside space-y-2 text-slate-400">
+                                    <li><strong className="text-slate-300">Pollinations AI:</strong> If you connect via OAuth, Pollinations handles your login. We don't store your credentials. We also fetch public pricing data from their API (once per 24 hours) to display current rates.</li>
+                                    <li><strong className="text-slate-300">Cloudflare:</strong> Hosts this site and processes basic network data (like IP addresses) for security.</li>
+                                </ul>
+                            </div>
+                            <div>
+                                <h4 className="font-semibold text-white mb-2">🛡️ Your Rights</h4>
+                                <p>Since we don't collect personal data, we have no data to delete or export.</p>
+                                <p className="mt-2">For questions, contact: <a href="mailto:contact@sanne.gay" className="text-blue-400 hover:text-blue-300 underline">contact@sanne.gay</a></p>
+                            </div>
+                            <div className="bg-green-600/10 border border-green-600/30 rounded-lg p-3">
+                                <p className="text-xs text-green-400">
+                                    📖 <strong>Open Source:</strong> This project is open source and hosted on GitHub. No personal data is collected or stored.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
         };
 
         // ==========================================
@@ -2351,6 +2586,45 @@ EXAMPLE OUTPUT:
         // MAIN APP - HeroUI Design
         // ==========================================
         const PROXY_URL = window.location.origin;
+        const FREE_API_KEY = 'POLLEN_API_KEY';
+        const FREE_COOLDOWN_MS = 60 * 1000; // 1 minute per model per generator
+        const FREE_USAGE_KEY = 'pollinations_free_usage';
+
+        const loadFreeUsage = () => {
+            try {
+                const raw = localStorage.getItem(FREE_USAGE_KEY);
+                const parsed = raw ? JSON.parse(raw) : null;
+                if (!parsed || !parsed.usage) return { usage: {} };
+                return parsed;
+            } catch (e) {
+                return { usage: {} };
+            }
+        };
+
+        const saveFreeUsage = (data) => {
+            try {
+                localStorage.setItem(FREE_USAGE_KEY, JSON.stringify(data));
+            } catch (e) {
+                console.error('Failed to persist free usage', e);
+            }
+        };
+
+        const getFreeCooldownRemaining = (generator, model) => {
+            const data = loadFreeUsage();
+            const last = data.usage?.[generator]?.[model];
+            if (!last) return 0;
+            const elapsed = Date.now() - last;
+            return Math.max(0, FREE_COOLDOWN_MS - elapsed);
+        };
+
+        const canUseFreeModel = (generator, model) => getFreeCooldownRemaining(generator, model) === 0;
+
+        const incrementFreeUsage = (generator, model) => {
+            const data = loadFreeUsage();
+            if (!data.usage[generator]) data.usage[generator] = {};
+            data.usage[generator][model] = Date.now();
+            saveFreeUsage(data);
+        };
         
         // Helper function to upload image to Cloudflare Images
         const uploadImageToCloudflare = async (blob, filename = 'image.png') => {
@@ -2388,6 +2662,7 @@ EXAMPLE OUTPUT:
             const [view, setView] = useState(getViewFromHash(window.location.hash));
             const [pollinationsKey, setPollinationsKey] = useState('');
             const [showHelpModal, setShowHelpModal] = useState(false);
+            const [showPrivacyModal, setShowPrivacyModal] = useState(false);
             
             const handleDisconnectPollinations = () => {
                 localStorage.removeItem('fm_pollinations_key');
@@ -2644,7 +2919,7 @@ EXAMPLE OUTPUT:
                                 <span className="text-zinc-700">•</span>
                                 <button 
                                     type="button"
-                                    onClick={showPrivacyNotice}
+                                    onClick={() => setShowPrivacyModal(true)}
                                     className="text-zinc-500 hover:text-zinc-300 transition-colors underline"
                                 >
                                     Privacy Notice
@@ -2656,6 +2931,9 @@ EXAMPLE OUTPUT:
                     
                     {/* Help Modal */}
                     <HelpModal isOpen={showHelpModal} onClose={() => setShowHelpModal(false)} />
+                    
+                    {/* Privacy Modal */}
+                    <PrivacyModal isOpen={showPrivacyModal} onClose={() => setShowPrivacyModal(false)} />
                 </div>
             );
         };
