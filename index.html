@@ -840,12 +840,12 @@ EXAMPLE OUTPUT:
                     const preset = createFMRTEPreset();
                     zip.file(`${data.newName.replace(/ /g, '_')}_Setup.json`, JSON.stringify(preset, null, 2));
 
-                    let finalLogoBlob = logoBlob;
+                    let finalLogoBlob = crestBlob;
                     
                     // If we have a Cloudflare Images URL, fetch from there
-                    if (logoUrl) {
+                    if (crestCloudflareUrl) {
                         try {
-                            const response = await fetch(logoUrl);
+                            const response = await fetch(crestCloudflareUrl);
                             if (response.ok) {
                                 finalLogoBlob = await response.blob();
                             }
