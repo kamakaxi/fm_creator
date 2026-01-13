@@ -4,5 +4,11 @@
   "main": "cloudflare-worker.js", 
   "assets": {
     "directory": "./"
-  }
+  },
+  "kv_namespaces": [
+    {
+      "binding": "IMAGE_TRACKER",
+      "id": "c2ef287ac4d44ed6ad7785a66071c469"
+    }
+  ]
 }
