@@ -210,6 +210,67 @@ export default {
       }
     }
 
+    // Handle text generation API endpoint
+    if (url.pathname === '/api/text' && url.searchParams.has('prompt') && request.method === 'GET') {
+      // Parse Parameters
+      const prompt = url.searchParams.get('prompt');
+      const system = url.searchParams.get('system') || '';
+      const model = url.searchParams.get('model') || 'gemini-fast';
+      const temperature = url.searchParams.get('temperature') || '0.3';
+      const json = url.searchParams.get('json') || 'true';
+      const seed = url.searchParams.get('seed') || '-1';
+      
+      // Get API key - use provided auth header or fall back to stored POLLEN_API_KEY
+      const authHeader = request.headers.get('Authorization');
+      let apiKey;
+      
+      if (authHeader && authHeader.startsWith('Bearer ')) {
+        apiKey = authHeader.replace('Bearer ', '');
+      } else if (env.POLLEN_API_KEY) {
+        // Use stored API key from Cloudflare environment variables
+        apiKey = env.POLLEN_API_KEY;
+      } else {
+        return new Response('Unauthorized: No API key configured', { 
+          status: 401,
+          headers: { ...corsHeaders, 'Content-Type': 'text/plain' }
+        });
+      }
+
+      if (!prompt) {
+        return new Response('Missing prompt parameter', { status: 400, headers: corsHeaders });
+      }
+
+      // Build Pollinations URL for text generation
+      let pollinationsUrl = `https://gen.pollinations.ai/text/${encodeURIComponent(prompt)}?model=${model}&temperature=${temperature}&json=${json}&seed=${seed}`;
+      if (system) pollinationsUrl += `&system=${encodeURIComponent(system)}`;
+
+      try {
+        // Fetch from Pollinations with API key
+        const response = await fetch(pollinationsUrl, {
+          headers: {
+            'Authorization': `Bearer ${apiKey}`
+          }
+        });
+
+        if (!response.ok) {
+          return new Response(`Pollinations Error: ${response.status}`, { status: response.status, headers: corsHeaders });
+        }
+
+        const textResponse = await response.text();
+        
+        return new Response(textResponse, {
+          headers: {
+            ...corsHeaders,
+            'Content-Type': 'text/plain',
+            'Cache-Control': 'public, max-age=3600'
+          },
+        });
+
+      } catch (error) {
+        return new Response(`Worker Error: ${error.message}`, { status: 500, headers: corsHeaders });
+      }
+    }
+
     // Serve index.html on root path
     if (url.pathname === '/') {
       return env.ASSETS.fetch(request);

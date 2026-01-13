@@ -581,9 +581,8 @@
             };
 
             const generateAI = async () => {
-                // Use user key if available, otherwise fall back to provided free key for text generation (Gemini)
+                // Use user key if available, otherwise worker will use stored POLLEN_API_KEY for free tier
                 const usingFreeKey = !pollinationsKey;
-                const apiKeyToUse = pollinationsKey || FREE_API_KEY;
 
                 if (usingFreeKey) {
                     const remaining = getFreeCooldownRemaining('text', 'gemini-fast');
@@ -632,12 +631,13 @@ EXAMPLE OUTPUT:
 "crestStyle": "classic-shield", "primaryColor": "#DA291C", "secondaryColor": "#FBE122"
 }`;
                     
-                    const url = `https://gen.pollinations.ai/text/${encodeURIComponent(userPrompt)}?system=${encodeURIComponent(systemInstruction)}&model=gemini-fast&temperature=0.3&json=true&seed=-1`;
+                    // Use Cloudflare Worker proxy for text generation (like images)
+                    // For free models, don't send Authorization header (worker will use stored POLLEN_API_KEY)
+                    // For paid models, send user's API key
+                    const proxyUrl = `${PROXY_URL}/api/text?prompt=${encodeURIComponent(userPrompt)}&system=${encodeURIComponent(systemInstruction)}&model=gemini-fast&temperature=0.3&json=true&seed=-1`;
                     
-                    const response = await fetch(url, {
-                        headers: {
-                            'Authorization': `Bearer ${apiKeyToUse}`
-                        }
+                    const response = await fetch(proxyUrl, {
+                        ...(pollinationsKey && { headers: { 'Authorization': `Bearer ${pollinationsKey}` } })
                     });
                     
                     if(!response.ok) {
@@ -667,6 +667,9 @@ EXAMPLE OUTPUT:
                         if(formatted[key]) formatted[key] = new Intl.NumberFormat('de-DE').format(formatted[key]);
                     });
                     setData(prev => ({ ...prev, ...formatted }));
+                    
+                    if (usingFreeKey) incrementFreeUsage('text', 'gemini-fast');
+                    
                     setActiveTab('identity');
 
                     if (usingFreeKey) incrementFreeUsage('text', 'gemini-fast');
