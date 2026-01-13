@@ -99,7 +99,7 @@
 
     <script type="text/babel">
         // Version constant
-        const VERSION = "1.1.4";
+        const VERSION = "1.1.5";
         
         const { useState, useEffect, useRef } = React;
 
@@ -717,13 +717,24 @@ EXAMPLE OUTPUT:
                 try {
                     const randomSeed = Math.floor(Math.random() * 2147483647);
                     const selectedModel = aiModel === 'flux-free' ? 'flux' : aiModel === 'zimage-free' ? 'zimage' : aiModel;
-                    const proxyUrl = `${PROXY_URL}/api?prompt=${encodeURIComponent(fullPrompt)}&negative_prompt=${encodeURIComponent(negativePrompt)}&model=${selectedModel}&width=1024&height=1024&nologo=true&enhance=false&seed=${randomSeed}`;
                     
-                    const response = await fetch(proxyUrl, {
-                        headers: {
-                            'Authorization': `Bearer ${apiKeyToUse}`
-                        }
-                    });
+                    // For free models, call Pollinations directly. For paid models, use the Cloudflare worker proxy
+                    const useProxy = !isFreeModel && pollinationsKey;
+                    let response;
+                    
+                    if (useProxy) {
+                        // Use Cloudflare Worker proxy for paid models with user authentication
+                        const proxyUrl = `${PROXY_URL}/api?prompt=${encodeURIComponent(fullPrompt)}&negative_prompt=${encodeURIComponent(negativePrompt)}&model=${selectedModel}&width=1024&height=1024&nologo=true&enhance=false&seed=${randomSeed}`;
+                        response = await fetch(proxyUrl, {
+                            headers: {
+                                'Authorization': `Bearer ${apiKeyToUse}`
+                            }
+                        });
+                    } else {
+                        // For free models, call Pollinations directly (no auth needed for free tiers)
+                        const pollinationsUrl = `https://gen.pollinations.ai/image/${encodeURIComponent(fullPrompt)}?model=${selectedModel}&width=1024&height=1024&nologo=true&enhance=false&negative_prompt=${encodeURIComponent(negativePrompt)}&seed=${randomSeed}`;
+                        response = await fetch(pollinationsUrl);
+                    }
                     
                     if(!response.ok) throw new Error('Failed to generate crest');
                     
@@ -1443,13 +1454,24 @@ EXAMPLE OUTPUT:
                 try {
                     const randomSeed = Math.floor(Math.random() * 2147483647);
                     const selectedModel = rData.aiModel === 'flux-free' ? 'flux' : rData.aiModel === 'zimage-free' ? 'zimage' : rData.aiModel;
-                    const proxyUrl = `${PROXY_URL}/api?prompt=${encodeURIComponent(desc)}&negative_prompt=${encodeURIComponent(negativePrompt)}&model=${selectedModel}&width=2048&height=2048&nologo=true&safe=false&quality=hd&seed=${randomSeed}`;
                     
-                    const response = await fetch(proxyUrl, {
-                        headers: {
-                            'Authorization': `Bearer ${apiKeyToUse}`
-                        }
-                    });
+                    // For free models, call Pollinations directly. For paid models, use the Cloudflare worker proxy
+                    const useProxy = !isFreeModel && pollinationsKey;
+                    let response;
+                    
+                    if (useProxy) {
+                        // Use Cloudflare Worker proxy for paid models with user authentication
+                        const proxyUrl = `${PROXY_URL}/api?prompt=${encodeURIComponent(desc)}&negative_prompt=${encodeURIComponent(negativePrompt)}&model=${selectedModel}&width=2048&height=2048&nologo=true&safe=false&quality=hd&seed=${randomSeed}`;
+                        response = await fetch(proxyUrl, {
+                            headers: {
+                                'Authorization': `Bearer ${apiKeyToUse}`
+                            }
+                        });
+                    } else {
+                        // For free models, call Pollinations directly (no auth needed for free tiers)
+                        const pollinationsUrl = `https://gen.pollinations.ai/image/${encodeURIComponent(desc)}?model=${selectedModel}&width=2048&height=2048&nologo=true&safe=false&quality=hd&negative_prompt=${encodeURIComponent(negativePrompt)}&seed=${randomSeed}`;
+                        response = await fetch(pollinationsUrl);
+                    }
                     
                     if(!response.ok) throw new Error('Failed to generate face image');
                     
