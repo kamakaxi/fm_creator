@@ -70,9 +70,9 @@ export default {
           });
         }
 
-        // Build custom variant URL with background removal, trimming, and resizing
+        // Build custom variant URL with background removal and resizing
         const baseUrl = uploadResult.result.variants[0].split('/public')[0];
-        const customUrl = `${baseUrl}/segment=foreground,trim=10,width=512,height=512,fit=pad,format=png`;
+        const customUrl = `${baseUrl}/segment=foreground,width=512,format=png`;
 
         // Return the image URLs
         return new Response(JSON.stringify({
