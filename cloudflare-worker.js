@@ -27,37 +27,6 @@ export default {
       }
 
       try {
-        // Clean up old images (older than 1 hour) - lazy deletion on each upload
-        if (env.IMAGE_TRACKER) {
-          try {
-            const trackerList = await env.IMAGE_TRACKER.list({ prefix: 'fm_' });
-            const now = Date.now();
-            const oneHour = 60 * 60 * 1000;
-            
-            for (const key of trackerList.keys) {
-              const metadata = await env.IMAGE_TRACKER.getWithMetadata(key.name);
-              if (metadata.metadata && metadata.metadata.timestamp) {
-                const age = now - metadata.metadata.timestamp;
-                if (age > oneHour) {
-                  // Extract actual image ID (remove 'fm_' prefix)
-                  const imageId = key.name.substring(3);
-                  // Delete the image from Cloudflare Images
-                  const deleteUrl = `https://api.cloudflare.com/client/v4/accounts/${env.CF_IMAGES_ACCOUNT_ID}/images/v1/${imageId}`;
-                  await fetch(deleteUrl, {
-                    method: 'DELETE',
-                    headers: { 'Authorization': `Bearer ${env.CF_IMAGES_API_TOKEN}` }
-                  });
-                  // Remove from KV tracker
-                  await env.IMAGE_TRACKER.delete(key.name);
-                  console.log(`Deleted old FM Creator image: ${imageId}`);
-                }
-              }
-            }
-          } catch (cleanupError) {
-            console.error('Cleanup error (non-fatal):', cleanupError);
-          }
-        }
-
         const formData = await request.formData();
         const imageFile = formData.get('file');
         
@@ -75,10 +44,9 @@ export default {
           { type: imageFile.type || 'image/png' }
         );
 
-        // Upload to Cloudflare Images with project-specific metadata
+        // Upload to Cloudflare Images
         const uploadFormData = new FormData();
         uploadFormData.append('file', imageBlob);
-        uploadFormData.append('metadata', JSON.stringify({ project: 'fm-creator' }));
         
         const uploadUrl = `https://api.cloudflare.com/client/v4/accounts/${env.CF_IMAGES_ACCOUNT_ID}/images/v1`;
         const uploadResponse = await fetch(uploadUrl, {
@@ -106,17 +74,6 @@ export default {
         const baseUrl = uploadResult.result.variants[0].split('/public')[0];
         const customUrl = `${baseUrl}/segment=foreground,trim=10,width=512,height=512,fit=pad,format=png`;
 
-        // Track this image in KV for later cleanup with 'fm_' prefix
-        if (env.IMAGE_TRACKER) {
-          try {
-            await env.IMAGE_TRACKER.put(`fm_${uploadResult.result.id}`, 'tracked', {
-              metadata: { timestamp: Date.now(), project: 'fm-creator' }
-            });
-          } catch (trackError) {
-            console.error('Failed to track image (non-fatal):', trackError);
-          }
-        }
-
         // Return the image URLs
         return new Response(JSON.stringify({
           success: true,
@@ -130,60 +87,6 @@ export default {
       } catch (error) {
         console.error('Upload error:', error);
         return new Response(JSON.stringify({ error: 'Upload error', message: error.message }), {
-          status: 500,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-        });
-      }
-    }
-
-    // Manual cleanup endpoint - DELETE old images
-    if (url.pathname === '/cleanup' && request.method === 'POST') {
-      if (!env.CF_IMAGES_ACCOUNT_ID || !env.CF_IMAGES_API_TOKEN || !env.IMAGE_TRACKER) {
-        return new Response(JSON.stringify({ error: 'Cleanup not configured' }), {
-          status: 500,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-        });
-      }
-
-      try {
-        const trackerList = await env.IMAGE_TRACKER.list({ prefix: 'fm_' });
-        const now = Date.now();
-        const oneHour = 60 * 60 * 1000;
-        let deleted = 0;
-        
-        for (const key of trackerList.keys) {
-          const metadata = await env.IMAGE_TRACKER.getWithMetadata(key.name);
-          if (metadata.metadata && metadata.metadata.timestamp) {
-            const age = now - metadata.metadata.timestamp;
-            if (age > oneHour) {
-              // Extract actual image ID (remove 'fm_' prefix)
-              const imageId = key.name.substring(3);
-              // Delete the image from Cloudflare Images
-              const deleteUrl = `https://api.cloudflare.com/client/v4/accounts/${env.CF_IMAGES_ACCOUNT_ID}/images/v1/${imageId}`;
-              const deleteResponse = await fetch(deleteUrl, {
-                method: 'DELETE',
-                headers: { 'Authorization': `Bearer ${env.CF_IMAGES_API_TOKEN}` }
-              });
-              
-              if (deleteResponse.ok) {
-                await env.IMAGE_TRACKER.delete(key.name);
-                deleted++;
-              }
-            }
-          }
-        }
-
-        return new Response(JSON.stringify({ 
-          success: true, 
-          deleted: deleted,
-          message: `Deleted ${deleted} image(s) older than 1 hour`
-        }), {
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-        });
-
-      } catch (error) {
-        console.error('Cleanup error:', error);
-        return new Response(JSON.stringify({ error: 'Cleanup failed', message: error.message }), {
           status: 500,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         });
