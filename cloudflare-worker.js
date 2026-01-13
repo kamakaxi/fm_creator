@@ -149,16 +149,21 @@ export default {
       const width = url.searchParams.get('width') || '1024';
       const height = url.searchParams.get('height') || '1024';
       
-      // 4. Require user API key via Authorization header
+      // 4. Get API key - use provided auth header or fall back to stored POLLEN_API_KEY
       const authHeader = request.headers.get('Authorization');
-      if (!authHeader || !authHeader.startsWith('Bearer ')) {
-        return new Response('Unauthorized: Connect your Pollinations account', { 
+      let apiKey;
+      
+      if (authHeader && authHeader.startsWith('Bearer ')) {
+        apiKey = authHeader.replace('Bearer ', '');
+      } else if (env.POLLEN_API_KEY) {
+        // Use stored API key from Cloudflare environment variables
+        apiKey = env.POLLEN_API_KEY;
+      } else {
+        return new Response('Unauthorized: No API key configured', { 
           status: 401,
           headers: { ...corsHeaders, 'Content-Type': 'text/plain' }
         });
       }
-      
-      const apiKey = authHeader.replace('Bearer ', '');
       const seed = url.searchParams.get('seed') || '';
       
       // Pollinations params
